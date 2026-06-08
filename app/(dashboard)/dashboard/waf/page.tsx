@@ -417,7 +417,7 @@ function WafSandbox({
   }, [result, body]);
 
   return (
-    <form onSubmit={handleSubmit} className="flex h-full flex-col gap-3">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
       <div>
         <Label htmlFor="sandbox-preset" className="text-xs text-muted-foreground mb-1 block">Load Preset Template</Label>
         <Select onValueChange={handleLoadPreset}>
@@ -799,9 +799,7 @@ export default function WafPage() {
           </div>
         </div>
       </div>
-
-      <div className="flex flex-1 flex-col gap-6 p-6">
-
+      <div className="flex flex-col gap-6 p-6">
         {/* ── Stat cards ──────────────────────────────── */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {/* Total Threats */}
@@ -1290,6 +1288,8 @@ export default function WafPage() {
           </CardContent>
         </Card>
 
+        {/* Bottom spacer to prevent layout clipping and guarantee scroll padding */}
+        <div className="h-6 shrink-0" />
       </div>
     </div>
   );

@@ -50,7 +50,7 @@ export function Sidebar({ children }: SidebarProps) {
         setCurrentProject: (p) => setCurrentProject(p),
       }}
     >
-      <div className="flex h-screen overflow-hidden bg-background">
+      <div className="flex h-screen max-h-screen min-h-0 overflow-hidden bg-background">
         {/* ── Sidebar ─────────────────────────── */}
         <aside
           id="app-sidebar"

@@ -32,7 +32,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col has-[aside]:h-screen has-[aside]:overflow-hidden">
         <ThemeProvider>
           <QueryProvider>
             <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
