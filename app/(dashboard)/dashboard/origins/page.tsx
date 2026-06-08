@@ -490,9 +490,18 @@ export default function OriginsPage() {
   const [newDomain, setNewDomain] = useState("");
   const [domainError, setDomainError] = useState("");
 
-  // Derived edge domain from project slug
+  // Get edge domain from backend edgeUrl, fallback to generating it using name & ID if missing
   const edgeDomain = currentProject
-    ? `${currentProject.slug}.edgewrap.com`
+    ? (currentProject.edgeUrl
+      ? currentProject.edgeUrl.replace(/^https?:\/\//, "")
+      : (() => {
+          const cleanName = currentProject.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "")
+            .slice(0, 30);
+          const suffix = currentProject.id.slice(-6).toLowerCase();
+          return `${cleanName}-${suffix}.edgewrap.com`;
+        })())
     : "";
 
   const handleAddOrigin = (data: OriginPayload) => {
