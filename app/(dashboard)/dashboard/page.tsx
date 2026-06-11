@@ -268,9 +268,9 @@ function CacheDonut({ hits, misses }: { hits: number; misses: number }) {
   const hitRate = total > 0 ? ((hits / total) * 100).toFixed(1) : "0.0";
   const data = total > 0
     ? [
-        { name: "Hit", value: hits },
-        { name: "Miss", value: misses },
-      ]
+      { name: "Hit", value: hits },
+      { name: "Miss", value: misses },
+    ]
     : [{ name: "No data", value: 1 }];
 
   return (
@@ -340,7 +340,7 @@ export default function OverviewPage() {
   const totals = usage?.totals;
   const periodEnd = usage?.periodEnd;
   const freeUsed = usage?.freeRequestsUsed ?? 0;
-  const freeLimit = usage?.freeRequestsLimit ?? 10_000;
+  const freeLimit = usage?.freeRequestsLimit ?? 20_000;
 
   const cacheHitRate = useMemo(() => {
     const hits = totals?.cacheHits ?? 0;
@@ -476,7 +476,7 @@ export default function OverviewPage() {
             icon={Server}
             label="Active Projects"
             value={activeProjects.toString()}
-            sub={`of ${plan?.maxProjects ?? "∞"} allowed`}
+            sub={`of ${plan?.projectsLimit ?? "∞"} allowed`}
             color="green"
           />
         </div>
@@ -522,21 +522,21 @@ export default function OverviewPage() {
                         <p className="text-xs font-medium text-muted-foreground">Total Requests</p>
                         <UsageBar
                           used={totals?.totalRequests ?? 0}
-                          limit={plan?.requestsPerMonth ?? null}
+                          limit={plan?.requestsPerMonthLimit ?? null}
                         />
                       </div>
                       <div className="flex flex-col gap-1">
                         <p className="text-xs font-medium text-muted-foreground">Bandwidth</p>
                         <UsageBar
                           used={Math.round((totals?.totalBandwidthBytes ?? 0) / (1024 * 1024 * 1024))}
-                          limit={plan?.bandwidthGbPerMonth ?? null}
+                          limit={plan?.bandwidthGbLimit ?? null}
                         />
                       </div>
                       <div className="flex flex-col gap-1">
                         <p className="text-xs font-medium text-muted-foreground">AI Calls</p>
                         <UsageBar
                           used={totals?.aiTotalCalls ?? 0}
-                          limit={plan?.aiCallsPerMonth ?? null}
+                          limit={plan?.id === "pro" ? 50000 : plan?.id === "team" ? 250000 : plan?.id === "enterprise" || plan?.id?.startsWith("enterprise_") ? 9999999 : null}
                         />
                       </div>
                       <div className="flex flex-col gap-1">

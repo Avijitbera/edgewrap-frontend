@@ -6,15 +6,32 @@ import { apiFetch } from "@/lib/api";
 export interface Plan {
   id: string;
   name: string;
-  slug: string;
   description: string | null;
+  stripePriceIdMonthly: string | null;
+  stripePriceIdYearly: string | null;
+  polarProductId: string | null;
   priceMonthlyUsd: number;
   priceYearlyUsd: number | null;
-  requestsPerMonth: number | null;
-  bandwidthGbPerMonth: number | null;
-  aiCallsPerMonth: number | null;
-  maxProjects: number | null;
-  features: string | null; // JSON array
+  requestsPerMonthLimit: number;
+  requestsPerSecondLimit: number;
+  bandwidthGbLimit: number;
+  projectsLimit: number;
+  graceProjectsCount: number;
+  apiKeysPerProjectLimit: number;
+  originsPerProjectLimit: number;
+  teamMembersLimit: number;
+  logRetentionDays: number;
+  aiInsightsEnabled: boolean;
+  replayEnabled: boolean;
+  aiWafEnabled: boolean;
+  aiCacheOptimizerEnabled: boolean;
+  aiGeoRoutingEnabled: boolean;
+  aiEmailOptEnabled: boolean;
+  aiBotDetectionEnabled: boolean;
+  payAsYouGoEnabled: boolean;
+  paygPricePerRequest: number | null;
+  paygPricePerGb: number | null;
+  paygPricePerAiCall: number | null;
   isActive: boolean;
 }
 
@@ -22,12 +39,14 @@ export interface Subscription {
   id: string;
   userId: string;
   planId: string;
-  status: "active" | "trialing" | "past_due" | "canceled" | "incomplete";
+  status: "active" | "trialing" | "past_due" | "canceled" | "incomplete" | "unpaid" | "paused";
   billingCycle: "monthly" | "yearly";
   currentPeriodStart: string;
   currentPeriodEnd: string;
   cancelAtPeriodEnd: boolean;
   stripeSubscriptionId: string | null;
+  paygActive: boolean;
+  paygSpendCapUsd: number | null;
   createdAt: string;
   updatedAt: string;
 }
