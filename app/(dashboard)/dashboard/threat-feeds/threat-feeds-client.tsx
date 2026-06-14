@@ -27,6 +27,7 @@ import {
   TrendingUp,
   Shield,
   Layers,
+  Lock,
 } from "lucide-react";
 import { useSidebarProject } from "@/components/layout/sidebar";
 import {
@@ -37,6 +38,7 @@ import {
   useThreatIpRanges,
   type ThreatFeed,
 } from "@/lib/queries/extended-edge";
+import { useSubscription } from "@/lib/queries/billing";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -260,6 +262,11 @@ export default function ThreatFeedsClient() {
   const { currentProject } = useSidebarProject();
   const projectId = currentProject?.id ?? null;
 
+  const { data: subData } = useSubscription();
+  const plan = subData?.plan;
+  const threatFeedsEnabled = plan?.threatFeedsEnabled ?? false;
+  const customThreatFeedsEnabled = plan?.customThreatFeedsEnabled ?? false;
+
   const [selectedFeedId, setSelectedFeedId] = useState<string>("");
   const [rangesPage, setRangesPage] = useState(1);
 
@@ -395,9 +402,25 @@ export default function ThreatFeedsClient() {
       </div>
 
       <div className="flex flex-1 flex-col gap-6 p-6">
-        
-        {/* Stat Cards Grid (Aligned with DDoS Page) */}
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {!threatFeedsEnabled ? (
+          <div className="relative rounded-xl border border-orange-500/20 bg-orange-500/5 p-8 text-center backdrop-blur-sm min-h-[400px] flex flex-col items-center justify-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-orange-500/10 mb-4">
+              <Lock className="h-6 w-6 text-orange-500" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">Premium Security Feature</h3>
+            <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+              IP Threat Feeds integration is exclusively available on **Pro**, **Team**, and **Enterprise** plans. Upgrade your plan to activate boundary filters at the global edge.
+            </p>
+            <div className="mt-4">
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => window.location.hash = "#/billing"}>
+                Upgrade Subscription
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Stat Cards Grid (Aligned with DDoS Page) */}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Card className="relative overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent pointer-events-none" />
             <CardContent className="pt-4 pb-4">
@@ -693,6 +716,8 @@ export default function ThreatFeedsClient() {
             )}
           </CardContent>
         </Card>
+          </>
+        )}
       </div>
 
       {/* ── MODAL: CREATE THREAT SUBSCRIPTION ───────────────────── */}
@@ -762,18 +787,28 @@ export default function ThreatFeedsClient() {
 
                 {feedType === "custom" && (
                   <div className="space-y-1 animate-in slide-in-from-top-1 duration-200">
-                    <Label htmlFor="feed-url-input" className="text-xs text-muted-foreground">External CSV/Text List URL *</Label>
+                    <Label htmlFor="feed-url-input" className="text-xs text-muted-foreground flex items-center justify-between">
+                      <span>External CSV/Text List URL *</span>
+                      {!customThreatFeedsEnabled && (
+                        <span className="text-[10px] text-orange-400 font-semibold flex items-center gap-0.5">
+                          <Lock className="h-2.5 w-2.5" /> Enterprise Only
+                        </span>
+                      )}
+                    </Label>
                     <Input
                       id="feed-url-input"
                       type="url"
                       value={customUrl}
                       onChange={(e) => setCustomUrl(e.target.value)}
-                      placeholder="https://rules.example.com/blacklist.txt"
+                      placeholder={customThreatFeedsEnabled ? "https://rules.example.com/blacklist.txt" : "Upgrade to Enterprise to use custom URL feeds"}
                       className="h-9 text-xs font-mono"
-                      required
+                      required={customThreatFeedsEnabled}
+                      disabled={!customThreatFeedsEnabled}
                     />
                     <p className="text-[10px] text-muted-foreground opacity-70">
-                      Link must point to a plain text page containing one CIDR IP address block per line.
+                      {customThreatFeedsEnabled
+                        ? "Link must point to a plain text page containing one CIDR IP address block per line."
+                        : "Custom external feeds are restricted to the Enterprise subscription tier."}
                     </p>
                   </div>
                 )}

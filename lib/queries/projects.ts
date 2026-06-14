@@ -9,6 +9,7 @@ export interface Project {
   originUrl: string | null;
   status: "active" | "readonly" | "deleted";
   statusReason: string | null;
+  ownerId?: string;
   edgeUrl?: string;
   memberRole?: "owner" | "admin" | "developer" | "viewer";
   wafEnabled?: boolean;
@@ -17,6 +18,8 @@ export interface Project {
   replayEnabled?: boolean;
   botDetectionEnabled?: boolean;
   aiInsightsEnabled?: boolean;
+  secretShieldEnabled?: boolean;
+  threatFeedsEnabled?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

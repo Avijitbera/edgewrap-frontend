@@ -28,6 +28,9 @@ export interface Plan {
   aiGeoRoutingEnabled: boolean;
   aiEmailOptEnabled: boolean;
   aiBotDetectionEnabled: boolean;
+  secretShieldEnabled: boolean;
+  threatFeedsEnabled: boolean;
+  customThreatFeedsEnabled: boolean;
   payAsYouGoEnabled: boolean;
   paygPricePerRequest: number | null;
   paygPricePerGb: number | null;
@@ -45,6 +48,8 @@ export interface Subscription {
   currentPeriodEnd: string;
   cancelAtPeriodEnd: boolean;
   stripeSubscriptionId: string | null;
+  polarSubscriptionId: string | null;
+  billingProvider: "stripe" | "polar";
   paygActive: boolean;
   paygSpendCapUsd: number | null;
   createdAt: string;
@@ -86,6 +91,8 @@ export interface Invoice {
   id: string;
   userId: string;
   stripeInvoiceId: string | null;
+  polarOrderId: string | null;
+  billingProvider: "stripe" | "polar";
   amount: number;
   currency: string;
   status: "draft" | "open" | "paid" | "uncollectible" | "void";
@@ -146,6 +153,7 @@ export function useCheckout() {
       billingCycle: "monthly" | "yearly";
       successUrl: string;
       cancelUrl: string;
+      provider?: "stripe" | "polar";
     }) =>
       apiFetch<{ checkoutUrl: string; sessionId: string }>("/billing/checkout", {
         method: "POST",
@@ -160,6 +168,16 @@ export function useBillingPortal() {
       apiFetch<{ portalUrl: string }>("/billing/portal", {
         method: "POST",
         body: { returnUrl },
+      }),
+  });
+}
+
+export function useCancelSubscription() {
+  return useMutation({
+    mutationFn: (body: { force: boolean }) =>
+      apiFetch<{ success: boolean; message: string }>("/billing/cancel", {
+        method: "POST",
+        body,
       }),
   });
 }

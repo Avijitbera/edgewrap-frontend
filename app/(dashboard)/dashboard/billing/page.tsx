@@ -19,6 +19,9 @@ import {
   ArrowUpRight,
   RefreshCw,
   Info,
+  Layers,
+  KeyRound,
+  Globe,
 } from "lucide-react";
 import {
   useSubscription,
@@ -26,10 +29,15 @@ import {
   useInvoices,
   useCheckout,
   useBillingPortal,
+  useCancelSubscription,
   usePlans,
   type Invoice,
   type Plan,
 } from "@/lib/queries/billing";
+import { useSidebarProject } from "@/components/layout/sidebar";
+import { useProjects } from "@/lib/queries/projects";
+import { useApiKeys } from "@/lib/queries/api-keys";
+import { useOrigins } from "@/lib/queries/origins";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -88,8 +96,12 @@ function UsageBar({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between text-xs">
         <span className="font-mono text-foreground">{formatNumber(used)}</span>
-        <span className="text-muted-foreground">
-          {limit ? `of ${formatNumber(limit)}` : "Unlimited"}
+        <span className="text-muted-foreground font-medium">
+          {limit === 0
+            ? "Disabled"
+            : limit !== null && limit !== undefined
+              ? `of ${formatNumber(limit)}`
+              : "Unlimited"}
         </span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/50">
@@ -127,11 +139,25 @@ export default function BillingPage() {
   const { data: invoices, isLoading: invoicesLoading, refetch: refetchInvoices } = useInvoices();
   const { data: plansData, isLoading: plansLoading } = usePlans();
 
+  const { currentProject } = useSidebarProject();
+  const projectId = currentProject?.id ?? null;
+
+  const { data: projectsList, isLoading: projectsLoading } = useProjects();
+  const { data: apiKeysList, isLoading: apiKeysLoading } = useApiKeys(projectId);
+  const { data: originsList, isLoading: originsLoading } = useOrigins(projectId);
+
+  const projectsCount = projectsList?.length ?? 0;
+  const apiKeysCount = apiKeysList?.filter((k) => k.status === "active").length ?? 0;
+  const originsCount = originsList?.length ?? 0;
+  const resourcesLoading = projectsLoading || apiKeysLoading || originsLoading || usageLoading;
+
   const checkout = useCheckout();
   const portal = useBillingPortal();
+  const cancelMutation = useCancelSubscription();
 
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const [showPlans, setShowPlans] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   const subscription = subData?.subscription ?? null;
   const currentPlan = subData?.plan ?? null;
@@ -163,6 +189,17 @@ export default function BillingPage() {
       window.open(portalUrl, "_blank");
     } catch (err: any) {
       alert(err.message ?? "Portal redirect failed.");
+    }
+  };
+
+  const handleCancelSubscription = async (force: boolean) => {
+    try {
+      const res = await cancelMutation.mutateAsync({ force });
+      alert(res.message || "Subscription cancelled successfully.");
+      setShowCancelModal(false);
+      refetchSub();
+    } catch (err: any) {
+      alert(err.message || "Failed to cancel subscription.");
     }
   };
 
@@ -198,6 +235,141 @@ export default function BillingPage() {
           </Button>
         </div>
       </div>
+
+      {/* Usage & Limits Card */}
+      <Card className="border-border/60 bg-card/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Resource Usage & Quotas</CardTitle>
+          <CardDescription className="text-xs">
+            Real-time consumption and limits for traffic and configuration resources
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Traffic metrics */}
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 mb-3">Traffic & Execution</h4>
+            {resourcesLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Requests */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Activity className="h-3.5 w-3.5 text-blue-400" />
+                      {subscription ? "Total Requests" : "Free Requests (Global)"}
+                    </p>
+                  </div>
+                  <UsageBar
+                    used={subscription ? (totals?.totalRequests ?? 0) : freeUsed}
+                    limit={subscription ? (currentPlan?.requestsPerMonthLimit ?? null) : freeLimit}
+                  />
+                </div>
+
+                {/* Bandwidth */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Database className="h-3.5 w-3.5 text-cyan-400" />
+                      Bandwidth
+                    </p>
+                  </div>
+                  <UsageBar
+                    used={Math.round((totals?.totalBandwidthBytes ?? 0) / (1024 * 1024 * 1024))}
+                    limit={currentPlan?.bandwidthGbLimit ?? 1}
+                  />
+                </div>
+
+                {/* AI Calls */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Cpu className="h-3.5 w-3.5 text-purple-400" />
+                      AI Calls
+                    </p>
+                  </div>
+                  <UsageBar
+                    used={totals?.aiTotalCalls ?? 0}
+                    limit={
+                      subscription
+                        ? (currentPlan?.id === "pro"
+                          ? 50000
+                          : currentPlan?.id === "team"
+                            ? 250000
+                            : currentPlan?.id === "enterprise" || currentPlan?.id?.startsWith("enterprise_")
+                              ? 9999999
+                              : 0)
+                        : 0
+                    }
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <Separator className="opacity-40" />
+
+          {/* Configuration/Resource limits */}
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 mb-3">Resource Configuration</h4>
+            {resourcesLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Projects */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Layers className="h-3.5 w-3.5 text-orange-400" />
+                      Projects (Account-wide)
+                    </p>
+                  </div>
+                  <UsageBar
+                    used={projectsCount}
+                    limit={currentPlan?.projectsLimit ?? 3}
+                  />
+                </div>
+
+                {/* API Keys */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <KeyRound className="h-3.5 w-3.5 text-yellow-400" />
+                      Active API Keys (Selected Project)
+                    </p>
+                  </div>
+                  <UsageBar
+                    used={apiKeysCount}
+                    limit={currentPlan?.apiKeysPerProjectLimit ?? 3}
+                  />
+                </div>
+
+                {/* Origins */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                      <Globe className="h-3.5 w-3.5 text-green-400" />
+                      Origins (Selected Project)
+                    </p>
+                  </div>
+                  <UsageBar
+                    used={originsCount}
+                    limit={currentPlan?.originsPerProjectLimit ?? 2}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className={cn("grid gap-6", subscription ? "md:grid-cols-3" : "grid-cols-1 max-w-3xl")}>
         {/* Current Plan Overview Card */}
@@ -280,7 +452,7 @@ export default function BillingPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-2">
+                <div className="flex flex-wrap gap-2 pt-2">
                   <Button
                     onClick={handleManageBilling}
                     disabled={portal.isPending}
@@ -303,24 +475,27 @@ export default function BillingPage() {
                   >
                     {showPlans ? "Hide Plans" : "Change Plan"}
                   </Button>
+                  {subscription && subscription.status === "active" && !subscription.cancelAtPeriodEnd && (
+                    <Button
+                      onClick={() => setShowCancelModal(true)}
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-xs h-9 border-red-500/20 text-red-400 hover:bg-red-500/5 hover:border-red-500/40"
+                    >
+                      <XCircle className="h-3.5 w-3.5" />
+                      Cancel Subscription
+                    </Button>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="rounded-xl border border-dashed p-4 flex flex-col items-center justify-center text-center">
+                <div className="rounded-xl border border-dashed p-6 flex flex-col items-center justify-center text-center">
                   <Info className="h-8 w-8 text-neutral-500 mb-2" />
                   <p className="text-sm font-bold">You are on the Free Tier</p>
                   <p className="text-xs text-muted-foreground max-w-sm mt-1 leading-relaxed">
                     Enjoy up to {formatNumber(freeLimit)} free requests per month. Upgrade to Starter or Pro to unlock pay-as-you-go scaling and AI modules.
                   </p>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Free request volume consumed</span>
-                    <span>{freeUsed} / {freeLimit}</span>
-                  </div>
-                  <UsageBar used={freeUsed} limit={freeLimit} />
                 </div>
 
                 <Button
@@ -399,75 +574,7 @@ export default function BillingPage() {
         )}
       </div>
 
-      {/* Usage Progress Cards (Only shown if subscribed) */}
-      {subscription && (
-        <Card className="border-border/60 bg-card/50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Usage This Period</CardTitle>
-            <CardDescription className="text-xs">
-              Volume breakdown across request, bandwidth and AI quotas
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {usageLoading ? (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Skeleton className="h-14 w-full" />
-                <Skeleton className="h-14 w-full" />
-                <Skeleton className="h-14 w-full" />
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                      <Activity className="h-3.5 w-3.5 text-blue-400" />
-                      Total Requests
-                    </p>
-                  </div>
-                  <UsageBar
-                    used={totals?.totalRequests ?? 0}
-                    limit={currentPlan?.requestsPerMonthLimit ?? null}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                      <Database className="h-3.5 w-3.5 text-cyan-400" />
-                      Bandwidth Gb
-                    </p>
-                  </div>
-                  <UsageBar
-                    used={Math.round((totals?.totalBandwidthBytes ?? 0) / (1024 * 1024 * 1024))}
-                    limit={currentPlan?.bandwidthGbLimit ?? null}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                      <Cpu className="h-3.5 w-3.5 text-purple-400" />
-                      AI Calls
-                    </p>
-                  </div>
-                  <UsageBar
-                    used={totals?.aiTotalCalls ?? 0}
-                    limit={
-                      currentPlan?.id === "pro"
-                        ? 50000
-                        : currentPlan?.id === "team"
-                          ? 250000
-                          : currentPlan?.id === "enterprise" || currentPlan?.id?.startsWith("enterprise_")
-                            ? 9999999
-                            : null
-                    }
-                  />
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Spacer */}
 
       {/* Upgrade & Tier Selector (Toggled by showPlans state) */}
       {showPlans && (
@@ -691,7 +798,7 @@ export default function BillingPage() {
                     {invoices.map((inv) => (
                       <tr key={inv.id} className="hover:bg-muted/10">
                         <td className="py-3 font-medium text-foreground">{formatDate(inv.createdAt)}</td>
-                        <td className="py-3 font-mono">{inv.stripeInvoiceId ?? inv.id.slice(0, 12)}</td>
+                        <td className="py-3 font-mono">{inv.stripeInvoiceId ?? inv.polarOrderId ?? inv.id.slice(0, 12)}</td>
                         <td className="py-3 font-mono text-foreground">{formatCurrency(inv.amount)}</td>
                         <td className="py-3">
                           <InvoiceStatusBadge status={inv.status} />
@@ -724,6 +831,61 @@ export default function BillingPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Cancellation Modal */}
+      <AnimatePresence>
+        {showCancelModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-md overflow-hidden rounded-xl border bg-card p-6 shadow-lg space-y-4"
+            >
+              <div className="flex items-center gap-2 text-red-500">
+                <AlertTriangle className="h-5 w-5" />
+                <h3 className="text-base font-bold">Cancel Subscription</h3>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Choose how you would like to cancel your subscription. Standard cancellation preserves access to premium benefits until the end of your billing cycle. Immediate cancellation terminates access immediately.
+              </p>
+
+              <div className="flex flex-col gap-2 pt-2">
+                <Button
+                  onClick={() => handleCancelSubscription(false)}
+                  disabled={cancelMutation.isPending}
+                  variant="outline"
+                  className="w-full text-xs font-semibold justify-start h-10 border-border"
+                >
+                  {cancelMutation.isPending && !cancelMutation.variables?.force && (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  )}
+                  Standard: Cancel at end of cycle
+                </Button>
+                <Button
+                  onClick={() => handleCancelSubscription(true)}
+                  disabled={cancelMutation.isPending}
+                  variant="destructive"
+                  className="w-full text-xs font-semibold justify-start h-10"
+                >
+                  {cancelMutation.isPending && cancelMutation.variables?.force && (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  )}
+                  Force Cancel: Terminate immediately
+                </Button>
+                <Button
+                  onClick={() => setShowCancelModal(false)}
+                  disabled={cancelMutation.isPending}
+                  variant="ghost"
+                  className="w-full text-xs font-semibold h-10 border border-transparent hover:border-border"
+                >
+                  Keep Subscription
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

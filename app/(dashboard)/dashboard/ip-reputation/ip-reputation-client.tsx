@@ -31,6 +31,7 @@ import {
   Activity,
   AlertTriangle,
   Clock,
+  Lock,
 } from "lucide-react";
 import { useSidebarProject } from "@/components/layout/sidebar";
 import {
@@ -42,6 +43,7 @@ import {
   type ThreatScoreRule,
   type ClientThreatLedgerEntry,
 } from "@/lib/queries/extended-edge";
+import { useSubscription } from "@/lib/queries/billing";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -410,6 +412,10 @@ export default function IpReputationClient() {
   const { currentProject } = useSidebarProject();
   const projectId = currentProject?.id ?? null;
 
+  const { data: subData } = useSubscription();
+  const plan = subData?.plan;
+  const threatFeedsEnabled = plan?.threatFeedsEnabled ?? false;
+
   const [ledgerPage, setLedgerPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -568,8 +574,24 @@ export default function IpReputationClient() {
       </div>
 
       <div className="flex flex-1 flex-col gap-6 p-6">
-
-        {/* ── 4-Column Stats Grid ─────────────────────────── */}
+        {!threatFeedsEnabled ? (
+          <div className="relative rounded-xl border border-rose-500/20 bg-rose-500/5 p-8 text-center backdrop-blur-sm min-h-[400px] flex flex-col items-center justify-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/10 mb-4">
+              <Lock className="h-6 w-6 text-rose-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">Premium Security Feature</h3>
+            <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+              Stateful Threat Scoring & IP Reputation tracking are exclusively available on **Pro**, **Team**, and **Enterprise** plans. Upgrade your plan to monitor edge threat histories.
+            </p>
+            <div className="mt-4">
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => window.location.hash = "#/billing"}>
+                Upgrade Subscription
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* ── 4-Column Stats Grid ─────────────────────────── */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {/* Active Rules Count */}
           <Card className="relative overflow-hidden">
@@ -1064,6 +1086,8 @@ export default function IpReputationClient() {
             )}
           </CardContent>
         </Card>
+          </>
+        )}
       </div>
     </div>
   );

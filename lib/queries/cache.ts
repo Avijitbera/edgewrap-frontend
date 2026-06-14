@@ -158,6 +158,19 @@ export function useCreateCacheRule(projectId: string | null | undefined) {
   });
 }
 
+export function useDeleteCacheRule(projectId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ruleId: string) =>
+      apiFetch<{ success: boolean }>(`/projects/${projectId}/cache/rules/${ruleId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cache-rules", projectId] });
+    },
+  });
+}
+
 export function useCacheStats(projectId: string | null | undefined) {
   return useQuery<CacheStats>({
     queryKey: ["cache-stats", projectId],

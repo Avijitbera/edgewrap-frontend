@@ -118,6 +118,7 @@ function Toggle({
       <button
         id={id}
         role="switch"
+        type="button"
         aria-checked={checked}
         disabled={disabled}
         onClick={() => onChange(!checked)}
@@ -603,6 +604,22 @@ export default function SettingsPage() {
                   description="AI-generated summaries, anomaly detections, and cost optimization recommendations"
                   checked={project?.aiInsightsEnabled ?? false}
                   onChange={handleToggle("aiInsightsEnabled")}
+                  disabled={isReadonly}
+                />
+                <Toggle
+                  id="toggle-secret-shield"
+                  label="Secret Shield"
+                  description="Scan requests and responses for credentials, API keys, and sensitive data leaks"
+                  checked={project?.secretShieldEnabled ?? false}
+                  onChange={handleToggle("secretShieldEnabled")}
+                  disabled={isReadonly}
+                />
+                <Toggle
+                  id="toggle-threat-feeds"
+                  label="Threat Feeds"
+                  description="Block or challenge requests from known threat sources (Tor exit nodes, VPNs, public proxies, custom URL feeds)"
+                  checked={project?.threatFeedsEnabled ?? false}
+                  onChange={handleToggle("threatFeedsEnabled")}
                   disabled={isReadonly}
                 />
               </div>

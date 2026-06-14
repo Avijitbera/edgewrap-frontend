@@ -18,6 +18,7 @@ import {
   Layers,
   Activity,
   Award,
+  Lock,
 } from "lucide-react";
 import { useSidebarProject } from "@/components/layout/sidebar";
 import {
@@ -28,6 +29,7 @@ import {
   type LoadBalancerPool,
 } from "@/lib/queries/extended-edge";
 import { useOrigins } from "@/lib/queries/origins";
+import { useSubscription } from "@/lib/queries/billing";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -104,6 +106,7 @@ export default function LoadBalancerClient() {
   const { data: pools, isLoading: poolsLoading } = useLoadBalancerPools(projectId);
   const createPool = useCreateLoadBalancerPool(projectId);
   const deletePool = useDeleteLoadBalancerPool(projectId);
+  const { data: subData, isLoading: subLoading } = useSubscription();
 
   if (!projectId) {
     return (
@@ -113,6 +116,18 @@ export default function LoadBalancerClient() {
       </div>
     );
   }
+
+  if (subLoading) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground p-6">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm">Loading subscription plan...</p>
+      </div>
+    );
+  }
+
+  const currentPlan = subData?.plan ?? null;
+  const isFreePlan = !currentPlan || currentPlan.id === "free";
 
   const handleAddOriginToLocal = () => {
     setFormError("");
@@ -200,161 +215,180 @@ export default function LoadBalancerClient() {
       </div>
 
       <div className="flex flex-1 flex-col gap-6 p-6">
-        {/* ── Top Section: LB Pools & Telemetry Guide ──── */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Active LB Pools list */}
-          <Card>
-            <CardHeader className="pb-3 border-b bg-muted/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Server className="h-4 w-4 text-primary" />
-                  <CardTitle className="text-base">Load Balancer Pools</CardTitle>
-                </div>
-                <Button
-                  id="btn-new-pool"
-                  size="sm"
-                  className="gap-1.5 text-xs"
-                  onClick={() => {
-                    setFormError("");
-                    setShowAddPoolModal(true);
-                  }}
-                >
-                  <Plus className="h-3.5 w-3.5" /> New Pool
-                </Button>
-              </div>
-              <CardDescription className="text-xs">
-                Manage groupings of origin servers and configure load allocation strategies for incoming requests.
-              </CardDescription>
-            </CardHeader>
+        {isFreePlan ? (
+          <div className="relative rounded-xl border border-rose-500/20 bg-rose-500/5 p-8 text-center backdrop-blur-sm min-h-[400px] flex flex-col items-center justify-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/10 mb-4">
+              <Lock className="h-6 w-6 text-rose-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">Premium Load Balancing Feature</h3>
+            <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+              Advanced Load Balancing (pools configuration, sticky sessions, weighted distribution, and multiple healthy origin failover) is exclusively available on **Starter**, **Pro**, **Team**, and **Enterprise** plans. Upgrade your plan to configure multi-origin load balancing.
+            </p>
+            <div className="mt-4">
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => window.location.hash = "#/billing"}>
+                Upgrade Subscription
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* ── Top Section: LB Pools & Telemetry Guide ──── */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {/* Active LB Pools list */}
+              <Card>
+                <CardHeader className="pb-3 border-b bg-muted/10">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Server className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-base">Load Balancer Pools</CardTitle>
+                    </div>
+                    <Button
+                      id="btn-new-pool"
+                      size="sm"
+                      className="gap-1.5 text-xs"
+                      onClick={() => {
+                        setFormError("");
+                        setShowAddPoolModal(true);
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> New Pool
+                    </Button>
+                  </div>
+                  <CardDescription className="text-xs">
+                    Manage groupings of origin servers and configure load allocation strategies for incoming requests.
+                  </CardDescription>
+                </CardHeader>
 
-            <CardContent className="p-0">
-              {poolsLoading ? (
-                <div className="space-y-2 p-4">
-                  {[1, 2].map(i => <Skeleton key={i} className="h-16 w-full" />)}
-                </div>
-              ) : !pools || pools.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
-                  <Network className="h-10 w-10 opacity-20" />
-                  <p className="text-sm font-medium">No Load Balancer pools configured</p>
-                  <p className="text-xs opacity-60">Create a pool and add origins to balance traffic.</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-border">
-                  {pools.map(pool => (
-                    <div key={pool.id} className="p-4 space-y-3 hover:bg-muted/10 transition-colors">
-                      <div className="flex items-start justify-between">
-                        <div className="space-y-1">
-                          <h4 className="text-sm font-semibold text-foreground">{pool.name}</h4>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <AlgorithmBadge algo={pool.algorithm} />
-                            {pool.sessionAffinityEnabled ? (
-                              <span className="inline-flex items-center rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-[10px] font-semibold text-green-400">
-                                Sticky Session Active ({pool.stickyCookieName})
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
-                                Stateless Balancing
-                              </span>
-                            )}
+                <CardContent className="p-0">
+                  {poolsLoading ? (
+                    <div className="space-y-2 p-4">
+                      {[1, 2].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+                    </div>
+                  ) : !pools || pools.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+                      <Network className="h-10 w-10 opacity-20" />
+                      <p className="text-sm font-medium">No Load Balancer pools configured</p>
+                      <p className="text-xs opacity-60">Create a pool and add origins to balance traffic.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {pools.map(pool => (
+                        <div key={pool.id} className="p-4 space-y-3 hover:bg-muted/10 transition-colors">
+                          <div className="flex items-start justify-between">
+                            <div className="space-y-1">
+                              <h4 className="text-sm font-semibold text-foreground">{pool.name}</h4>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <AlgorithmBadge algo={pool.algorithm} />
+                                {pool.sessionAffinityEnabled ? (
+                                  <span className="inline-flex items-center rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-[10px] font-semibold text-green-400">
+                                    Sticky Session Active ({pool.stickyCookieName})
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                                    Stateless Balancing
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <Button
+                              id={`btn-del-pool-${pool.id}`}
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-destructive hover:bg-destructive-hover"
+                              onClick={() => {
+                                if (confirm("Are you sure you want to delete this load balancer pool?")) {
+                                  deletePool.mutate(pool.id);
+                                }
+                              }}
+                              disabled={deletePool.isPending}
+                            >
+                              {deletePool.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                            </Button>
+                          </div>
+
+                          {/* Origin list in pool */}
+                          <div className="rounded-lg border bg-muted/20 p-2.5 space-y-1">
+                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Origins Assigned</span>
+                            <div className="space-y-1.5 pt-1 text-xs">
+                              {pool.origins && pool.origins.length > 0 ? (
+                                pool.origins.map(mapping => {
+                                  const origin = origins?.find(o => o.id === mapping.originId);
+                                  const label = origin ? origin.label || origin.url : mapping.originId;
+                                  return (
+                                    <div key={mapping.originId} className="flex justify-between items-center font-mono">
+                                      <span className="text-foreground/85 truncate max-w-xs">{label}</span>
+                                      <span className="text-primary font-semibold text-[11px]">Weight: {mapping.weight}</span>
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <span className="italic opacity-60">No origins configured for this pool</span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                        <Button
-                          id={`btn-del-pool-${pool.id}`}
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 w-7 p-0 text-destructive hover:bg-destructive-hover"
-                          onClick={() => {
-                            if (confirm("Are you sure you want to delete this load balancer pool?")) {
-                              deletePool.mutate(pool.id);
-                            }
-                          }}
-                          disabled={deletePool.isPending}
-                        >
-                          {deletePool.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                        </Button>
-                      </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-                      {/* Origin list in pool */}
-                      <div className="rounded-lg border bg-muted/20 p-2.5 space-y-1">
-                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Origins Assigned</span>
-                        <div className="space-y-1.5 pt-1 text-xs">
-                          {pool.origins && pool.origins.length > 0 ? (
-                            pool.origins.map(mapping => {
-                              const origin = origins?.find(o => o.id === mapping.originId);
-                              const label = origin ? origin.label || origin.url : mapping.originId;
-                              return (
-                                <div key={mapping.originId} className="flex justify-between items-center font-mono">
-                                  <span className="text-foreground/85 truncate max-w-xs">{label}</span>
-                                  <span className="text-primary font-semibold text-[11px]">Weight: {mapping.weight}</span>
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <span className="italic opacity-60">No origins configured for this pool</span>
-                          )}
-                        </div>
+              {/* LB Algorithms Guide (Right) */}
+              <Card className="flex flex-col">
+                <CardHeader className="pb-3 border-b bg-muted/10">
+                  <div className="flex items-center gap-2">
+                    <Shuffle className="h-4 w-4 text-primary" />
+                    <h3 className="text-sm font-semibold">Load Balancing Algorithms</h3>
+                  </div>
+                  <CardDescription className="text-xs">
+                    How client requests are directed to target origin servers in high-availability configurations.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-4 flex-1 flex flex-col justify-between space-y-4 text-xs leading-relaxed text-muted-foreground">
+                  <div className="space-y-3.5">
+                    <div className="flex items-start gap-2.5">
+                      <div className="h-5 w-5 rounded bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0 font-bold font-mono mt-0.5">R</div>
+                      <div>
+                        <p className="font-semibold text-foreground mb-0.5">Weighted Round Robin</p>
+                        <p className="text-muted-foreground">Spins requests sequentially across active nodes according to assigned weights, prioritizing high-capacity endpoints.</p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    <div className="flex items-start gap-2.5">
+                      <div className="h-5 w-5 rounded bg-green-500/10 flex items-center justify-center text-green-400 shrink-0 font-bold font-mono mt-0.5">L</div>
+                      <div>
+                        <p className="font-semibold text-foreground mb-0.5">Least Connections</p>
+                        <p className="text-muted-foreground">Queries are directed to nodes with the fewest active requests, dynamically protecting servers from spike overloads.</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-2.5">
+                      <div className="h-5 w-5 rounded bg-purple-500/10 flex items-center justify-center text-purple-400 shrink-0 font-bold font-mono mt-0.5">S</div>
+                      <div>
+                        <p className="font-semibold text-foreground mb-0.5">Sticky Cookies (Session Affinity)</p>
+                        <p className="text-muted-foreground">Injects a unique tracking cookie at the edge client, locking consecutive browser queries to the exact same host for session consistency.</p>
+                      </div>
+                    </div>
+                  </div>
 
-          {/* LB Algorithms Guide (Right) */}
-          <Card className="flex flex-col">
-            <CardHeader className="pb-3 border-b bg-muted/10">
-              <div className="flex items-center gap-2">
-                <Shuffle className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold">Load Balancing Algorithms</h3>
-              </div>
-              <CardDescription className="text-xs">
-                How client requests are directed to target origin servers in high-availability configurations.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-4 flex-1 flex flex-col justify-between space-y-4 text-xs leading-relaxed text-muted-foreground">
-              <div className="space-y-3.5">
-                <div className="flex items-start gap-2.5">
-                  <div className="h-5 w-5 rounded bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0 font-bold font-mono mt-0.5">R</div>
-                  <div>
-                    <p className="font-semibold text-foreground mb-0.5">Weighted Round Robin</p>
-                    <p className="text-muted-foreground">Spins requests sequentially across active nodes according to assigned weights, prioritizing high-capacity endpoints.</p>
+                  <div className="rounded-lg border border-dashed p-3 bg-muted/20 space-y-1 text-xs">
+                    <p className="font-medium text-foreground flex items-center gap-1.5">
+                      <Activity className="h-3.5 w-3.5 text-primary" /> Balancer Diagnostics
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 text-[10px] font-mono mt-1 border-t pt-1">
+                      <span className="text-muted-foreground">Active Pools:</span>
+                      <span className="text-foreground">{pools?.length ?? 0} active</span>
+                      <span className="text-muted-foreground">Routing Precision:</span>
+                      <span className="text-green-400">High availability auto-failover</span>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <div className="h-5 w-5 rounded bg-green-500/10 flex items-center justify-center text-green-400 shrink-0 font-bold font-mono mt-0.5">L</div>
-                  <div>
-                    <p className="font-semibold text-foreground mb-0.5">Least Connections</p>
-                    <p className="text-muted-foreground">Queries are directed to nodes with the fewest active requests, dynamically protecting servers from spike overloads.</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2.5">
-                  <div className="h-5 w-5 rounded bg-purple-500/10 flex items-center justify-center text-purple-400 shrink-0 font-bold font-mono mt-0.5">S</div>
-                  <div>
-                    <p className="font-semibold text-foreground mb-0.5">Sticky Cookies (Session Affinity)</p>
-                    <p className="text-muted-foreground">Injects a unique tracking cookie at the edge client, locking consecutive browser queries to the exact same host for session consistency.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-dashed p-3 bg-muted/20 space-y-1 text-xs">
-                <p className="font-medium text-foreground flex items-center gap-1.5">
-                  <Activity className="h-3.5 w-3.5 text-primary" /> Balancer Diagnostics
-                </p>
-                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono mt-1 border-t pt-1">
-                  <span className="text-muted-foreground">Active Pools:</span>
-                  <span className="text-foreground">{pools?.length ?? 0} active</span>
-                  <span className="text-muted-foreground">Routing Precision:</span>
-                  <span className="text-green-400">High availability auto-failover</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── MODAL: CREATE LOAD BALANCER POOL ────────────────────── */}
-      {showAddPoolModal && (
+      {!isFreePlan && showAddPoolModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-xl rounded-xl border bg-background shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between border-b px-5 py-4 bg-muted/10 shrink-0">

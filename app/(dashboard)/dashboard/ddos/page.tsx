@@ -93,6 +93,7 @@ function Toggle({
       </div>
       <button
         role="switch"
+        type="button"
         aria-checked={checked}
         disabled={disabled}
         onClick={() => onChange(!checked)}

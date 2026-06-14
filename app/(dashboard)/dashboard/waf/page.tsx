@@ -116,6 +116,7 @@ function Toggle({
       <button
         id={`toggle-${label.toLowerCase().replace(/\s+/g, "-")}`}
         role="switch"
+        type="button"
         aria-checked={checked}
         disabled={disabled}
         onClick={() => onChange(!checked)}

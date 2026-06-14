@@ -37,6 +37,7 @@ import {
   type AlertChannel,
   type AlertDispatch,
 } from "@/lib/queries/extended-edge";
+import { useSubscription } from "@/lib/queries/billing";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -139,7 +140,7 @@ function FormatDate({ dateStr }: { dateStr: string | number | null }) {
   }
 }
 
-function DispatchStatusBadge({ status }: { status: AlertDispatch["dispatchStatus"] }) {
+function DispatchStatusBadge({ status }: { status?: "success" | "failed" | null }) {
   if (status === "success") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-[10px] font-semibold text-green-400">
@@ -216,6 +217,30 @@ export default function AlertsClient() {
     page: dispatchPage,
     limit: 10,
   });
+
+  // Subscription & Limits
+  const { data: subData } = useSubscription();
+  const currentPlan = subData?.plan ?? null;
+  const planId = currentPlan?.id ?? "free";
+  const planName = currentPlan?.name ?? "Free";
+
+  const POLICY_LIMITS: Record<string, number> = {
+    free: 1,
+    starter: 3,
+    pro: 10,
+    team: 30,
+    enterprise: 100,
+  };
+  const CHANNEL_LIMITS: Record<string, number> = {
+    free: 1,
+    starter: 2,
+    pro: 5,
+    team: 15,
+    enterprise: 50,
+  };
+
+  const policyLimit = POLICY_LIMITS[planId] ?? 1;
+  const channelLimit = CHANNEL_LIMITS[planId] ?? 1;
 
   // Reset page pagination when tab changes
   useEffect(() => {
@@ -366,18 +391,29 @@ export default function AlertsClient() {
               <CardHeader className="pb-3 border-b bg-muted/10">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <CardTitle className="text-base">Trigger Policies</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      Trigger Policies
+                      <span className="text-[10px] font-normal text-muted-foreground px-2 py-0.5 bg-muted rounded-full border">
+                        {policies?.length ?? 0} / {policyLimit} ({planName})
+                      </span>
+                    </CardTitle>
                     <CardDescription className="text-xs">Configure criteria thresholds that fire alerting incident messages.</CardDescription>
                   </div>
-                  <Button
-                    id="btn-new-policy"
-                    size="sm"
-                    className="gap-1.5 text-xs self-start sm:self-auto"
-                    onClick={() => setShowAddPolicyModal(true)}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    New Policy
-                  </Button>
+                  <div className="flex flex-col items-end gap-1">
+                    <Button
+                      id="btn-new-policy"
+                      size="sm"
+                      className="gap-1.5 text-xs self-start sm:self-auto"
+                      onClick={() => setShowAddPolicyModal(true)}
+                      disabled={policies !== undefined && policies.length >= policyLimit}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      New Policy
+                    </Button>
+                    {policies !== undefined && policies.length >= policyLimit && (
+                      <span className="text-[9px] text-amber-500 font-medium">Plan limit reached. Upgrade to add more.</span>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
 
@@ -482,18 +518,29 @@ export default function AlertsClient() {
               <CardHeader className="pb-3 border-b bg-muted/10">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <CardTitle className="text-base">Outbound Channels</CardTitle>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      Outbound Channels
+                      <span className="text-[10px] font-normal text-muted-foreground px-2 py-0.5 bg-muted rounded-full border">
+                        {channels?.length ?? 0} / {channelLimit} ({planName})
+                      </span>
+                    </CardTitle>
                     <CardDescription className="text-xs">Establish target integrations where alert dispatches are delivered.</CardDescription>
                   </div>
-                  <Button
-                    id="btn-new-channel"
-                    size="sm"
-                    className="gap-1.5 text-xs self-start sm:self-auto"
-                    onClick={() => setShowAddChannelModal(true)}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Channel
-                  </Button>
+                  <div className="flex flex-col items-end gap-1">
+                    <Button
+                      id="btn-new-channel"
+                      size="sm"
+                      className="gap-1.5 text-xs self-start sm:self-auto"
+                      onClick={() => setShowAddChannelModal(true)}
+                      disabled={channels !== undefined && channels.length >= channelLimit}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Channel
+                    </Button>
+                    {channels !== undefined && channels.length >= channelLimit && (
+                      <span className="text-[9px] text-amber-500 font-medium">Plan limit reached. Upgrade to add more.</span>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
 
@@ -633,7 +680,7 @@ export default function AlertsClient() {
                                 <ChannelTypeBadge type={channelType} />
                               </td>
                               <td className="px-4 py-3">
-                                <DispatchStatusBadge status={disp.dispatchStatus} />
+                                <DispatchStatusBadge status={disp.status || disp.dispatchStatus} />
                               </td>
                               <td className="px-4 py-3 font-mono text-red-400 max-w-xs truncate">
                                 {disp.errorMessage || <span className="text-muted-foreground/30 font-sans italic">—</span>}
@@ -871,7 +918,7 @@ export default function AlertsClient() {
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 rounded-xl border bg-muted/20 p-4 font-mono text-xs">
                 <div>
                   <span className="text-[10px] text-muted-foreground block mb-0.5 uppercase tracking-wider font-sans font-semibold">Status Code</span>
-                  <DispatchStatusBadge status={viewingDispatch.dispatchStatus} />
+                  <DispatchStatusBadge status={viewingDispatch.status || viewingDispatch.dispatchStatus} />
                 </div>
                 <div>
                   <span className="text-[10px] text-muted-foreground block mb-0.5 uppercase tracking-wider font-sans font-semibold">Dispatch ID</span>

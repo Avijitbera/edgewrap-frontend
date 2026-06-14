@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Server,
   Link,
+  Lock,
 } from "lucide-react";
 import { useSidebarProject } from "@/components/layout/sidebar";
 import {
@@ -35,6 +36,7 @@ import {
   type CustomDomain,
   type OriginPayload,
 } from "@/lib/queries/origins";
+import { useSubscription } from "@/lib/queries/billing";
 import {
   Card,
   CardContent,
@@ -232,15 +234,47 @@ function OriginCard({
   projectId: string;
 }) {
   const [editing, setEditing] = useState(false);
+  const [cardError, setCardError] = useState("");
   const update = useUpdateOrigin(projectId);
   const remove = useDeleteOrigin(projectId);
 
   const handleUpdate = (data: OriginPayload) => {
-    update.mutate({ id: origin.id, ...data }, { onSuccess: () => setEditing(false) });
+    setCardError("");
+    update.mutate(
+      { id: origin.id, ...data },
+      {
+        onSuccess: () => {
+          setEditing(false);
+          setCardError("");
+        },
+        onError: (err: any) => {
+          setCardError(err?.message ?? "Failed to update origin");
+        },
+      }
+    );
   };
 
   const handleSetPrimary = () => {
-    update.mutate({ id: origin.id, isPrimary: true });
+    setCardError("");
+    update.mutate(
+      { id: origin.id, isPrimary: true },
+      {
+        onSuccess: () => setCardError(""),
+        onError: (err: any) => {
+          setCardError(err?.message ?? "Failed to set primary origin");
+        },
+      }
+    );
+  };
+
+  const handleDelete = () => {
+    setCardError("");
+    remove.mutate(origin.id, {
+      onSuccess: () => setCardError(""),
+      onError: (err: any) => {
+        setCardError(err?.message ?? "Failed to delete origin");
+      },
+    });
   };
 
   const lastChecked = origin.lastCheckedAt
@@ -313,7 +347,10 @@ function OriginCard({
                 variant="ghost"
                 size="sm"
                 className="h-7 w-7 p-0"
-                onClick={() => setEditing(true)}
+                onClick={() => {
+                  setEditing(true);
+                  setCardError("");
+                }}
               >
                 <Edit2 className="h-3.5 w-3.5" />
               </Button>
@@ -322,7 +359,7 @@ function OriginCard({
                 variant="ghost"
                 size="sm"
                 className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                onClick={() => remove.mutate(origin.id)}
+                onClick={handleDelete}
                 disabled={remove.isPending}
               >
                 {remove.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
@@ -345,6 +382,11 @@ function OriginCard({
               </span>
             )}
           </div>
+          {cardError && (
+            <p className="mt-3 text-xs text-destructive flex items-center gap-1.5 border-t border-destructive/10 pt-2">
+              <XCircle className="h-3.5 w-3.5" /> {cardError}
+            </p>
+          )}
         </div>
       ) : (
         <div className="p-4">
@@ -360,9 +402,17 @@ function OriginCard({
               healthCheckTimeoutMs: origin.healthCheckTimeoutMs,
             }}
             onSubmit={handleUpdate}
-            onCancel={() => setEditing(false)}
+            onCancel={() => {
+              setEditing(false);
+              setCardError("");
+            }}
             isPending={update.isPending}
           />
+          {cardError && (
+            <p className="mt-3 text-xs text-destructive flex items-center gap-1.5">
+              <XCircle className="h-3.5 w-3.5" /> {cardError}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -482,6 +532,12 @@ export default function OriginsPage() {
 
   const { data: origins, isLoading: originsLoading } = useOrigins(projectId);
   const { data: domains, isLoading: domainsLoading } = useCustomDomains(projectId);
+  const { data: subData } = useSubscription();
+
+  const currentPlan = subData?.plan ?? null;
+  const originsLimit = currentPlan?.originsPerProjectLimit ?? 2;
+  const totalCount = origins?.length ?? 0;
+  const isLimitReached = totalCount >= originsLimit;
 
   const createOrigin = useCreateOrigin(projectId);
   const addDomain = useAddCustomDomain(projectId);
@@ -489,6 +545,7 @@ export default function OriginsPage() {
   const [showAddOrigin, setShowAddOrigin] = useState(false);
   const [newDomain, setNewDomain] = useState("");
   const [domainError, setDomainError] = useState("");
+  const [originError, setOriginError] = useState("");
 
   // Get edge domain from backend edgeUrl, fallback to generating it using name & ID if missing
   const edgeDomain = currentProject
@@ -505,9 +562,18 @@ export default function OriginsPage() {
     : "";
 
   const handleAddOrigin = (data: OriginPayload) => {
+    setOriginError("");
     createOrigin.mutate(
       { ...data, isPrimary: (origins?.length ?? 0) === 0 },
-      { onSuccess: () => setShowAddOrigin(false) }
+      {
+        onSuccess: () => {
+          setShowAddOrigin(false);
+          setOriginError("");
+        },
+        onError: (err: any) => {
+          setOriginError(err?.message ?? "Failed to create origin");
+        },
+      }
     );
   };
 
@@ -532,7 +598,6 @@ export default function OriginsPage() {
 
   const primaryOrigin = origins?.find((o) => o.isPrimary);
   const healthyCount = origins?.filter((o) => o.isHealthy).length ?? 0;
-  const totalCount = origins?.length ?? 0;
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -594,6 +659,9 @@ export default function OriginsPage() {
               <div>
                 <CardTitle className="flex items-center gap-2 text-sm">
                   <Server className="h-4 w-4 text-primary" /> Origin Servers
+                  <span className="ml-1.5 text-xs font-normal text-muted-foreground border bg-muted/40 px-2 py-0.5 rounded-full">
+                    {totalCount} / {originsLimit} used
+                  </span>
                 </CardTitle>
                 <CardDescription className="text-xs">
                   Define upstream servers. Traffic is load-balanced by weight; unhealthy origins are automatically excluded.
@@ -604,15 +672,30 @@ export default function OriginsPage() {
                   id="add-origin-btn"
                   size="sm"
                   className="gap-1.5 text-xs"
+                  disabled={isLimitReached}
                   onClick={() => setShowAddOrigin(true)}
                 >
-                  <Plus className="h-3.5 w-3.5" /> Add Origin
+                  {isLimitReached ? <Lock className="h-3.5 w-3.5 text-amber-500" /> : <Plus className="h-3.5 w-3.5" />} Add Origin
                 </Button>
               )}
             </div>
           </CardHeader>
 
           <CardContent className="p-0">
+            {isLimitReached && (
+              <div className="mx-4 mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3 flex items-center justify-between gap-4">
+                <div className="flex items-start gap-2 text-muted-foreground text-[11px] leading-relaxed">
+                  <Lock className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-foreground mb-0.5 text-xs">Origin Limit Reached</p>
+                    <p>Your current plan allows up to {originsLimit} origins per project. Upgrade to configure additional upstream hosts for failover or weighted load distribution.</p>
+                  </div>
+                </div>
+                <Button size="sm" className="h-7 text-[11px] shrink-0 gap-1" variant="outline" onClick={() => window.location.hash = "#/billing"}>
+                  Upgrade Plan
+                </Button>
+              </div>
+            )}
             {/* Add form */}
             {showAddOrigin && (
               <>
@@ -620,9 +703,17 @@ export default function OriginsPage() {
                   <p className="mb-3 text-sm font-medium">New origin</p>
                   <OriginForm
                     onSubmit={handleAddOrigin}
-                    onCancel={() => setShowAddOrigin(false)}
+                    onCancel={() => {
+                      setShowAddOrigin(false);
+                      setOriginError("");
+                    }}
                     isPending={createOrigin.isPending}
                   />
+                  {originError && (
+                    <p className="mt-3 text-xs text-destructive flex items-center gap-1.5">
+                      <XCircle className="h-3.5 w-3.5" /> {originError}
+                    </p>
+                  )}
                 </div>
                 <Separator />
               </>

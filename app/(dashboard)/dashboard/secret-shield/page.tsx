@@ -27,9 +27,13 @@ import {
   FileText,
   HelpCircle,
   Shield,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useSidebarProject } from "@/components/layout/sidebar";
-import { useSecretShieldStats, useSecretShieldEvents } from "@/lib/queries/security";
+import { useSecretShieldStats, useSecretShieldEvents, useCustomSecretPatterns, useUpdateCustomSecretPatterns } from "@/lib/queries/security";
+import { useSubscription } from "@/lib/queries/billing";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -225,6 +229,38 @@ export default function SecretShieldPage() {
   const eventsMeta = eventsResp?.meta;
   const totalPages = eventsMeta ? Math.ceil(eventsMeta.total / 10) : 0;
 
+  // Custom Patterns Registry
+  const { data: subData } = useSubscription();
+  const isPremiumPlan = subData?.plan?.secretShieldEnabled ?? false;
+  const { data: customPatterns = [], isLoading: customPatternsLoading } = useCustomSecretPatterns(isPremiumPlan ? projectId : null);
+  const updateCustomPatterns = useUpdateCustomSecretPatterns(projectId);
+
+  const [newRegex, setNewRegex] = useState("");
+  const [newAction, setNewAction] = useState<"masked" | "blocked" | "logged">("masked");
+  const [newSeverity, setNewSeverity] = useState<"block" | "mask" | "log">("mask");
+
+  const handleAddPattern = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRegex.trim()) return;
+    try {
+      new RegExp(newRegex);
+    } catch {
+      alert("Invalid regular expression pattern.");
+      return;
+    }
+    const updated = [
+      ...customPatterns,
+      { regex: newRegex, action: newAction, severity: newSeverity },
+    ];
+    await updateCustomPatterns.mutateAsync(updated);
+    setNewRegex("");
+  };
+
+  const handleDeletePattern = async (index: number) => {
+    const updated = customPatterns.filter((_, i) => i !== index);
+    await updateCustomPatterns.mutateAsync(updated);
+  };
+
   // Stat computations
   const totalSecrets = stats?.total ?? 0;
   const blockedCount = stats?.actionBreakdown?.find((a) => a.action === "blocked")?.total ?? 0;
@@ -256,11 +292,17 @@ export default function SecretShieldPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Always active/enabled at proxy layer */}
-          <div className="flex items-center gap-1.5 rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
-            Shield Protection Active
-          </div>
+          {currentProject?.secretShieldEnabled ? (
+            <div className="flex items-center gap-1.5 rounded-full border border-green-500/30 bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse" />
+              Shield Protection Active
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground" />
+              Shield Protection Inactive
+            </div>
+          )}
         </div>
       </div>
 
@@ -545,6 +587,137 @@ export default function SecretShieldPage() {
                     Next <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Custom Regex Patterns Registry */}
+        <Card className="relative overflow-hidden">
+          <CardHeader className="border-b pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <ShieldAlert className="h-4 w-4 text-rose-400" /> Custom Secret Patterns Registry
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Define custom regular expressions to match, mask, or block sensitive credentials in request and response payloads.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {!isPremiumPlan ? (
+              <div className="relative rounded-xl border border-rose-500/20 bg-rose-500/5 p-8 text-center backdrop-blur-sm">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/10 mb-4">
+                  <Lock className="h-6 w-6 text-rose-400" />
+                </div>
+                <h3 className="text-sm font-semibold text-foreground">Premium Security Feature</h3>
+                <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+                  Custom secret pattern registry is exclusively available on **Pro**, **Team**, and **Enterprise** plans. Upgrade your plan to specify custom Regex rules.
+                </p>
+                <div className="mt-4">
+                  <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => window.location.hash = "#/billing"}>
+                    Upgrade Subscription
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Form to add pattern */}
+                <form onSubmit={handleAddPattern} className="flex flex-wrap items-end gap-3 rounded-lg border bg-muted/20 p-4">
+                  <div className="flex-1 min-w-[240px] space-y-1.5">
+                    <label htmlFor="custom-regex-input" className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Regular Expression Pattern
+                    </label>
+                    <Input
+                      id="custom-regex-input"
+                      placeholder="e.g. key-[a-z0-9]{32}"
+                      value={newRegex}
+                      onChange={(e) => setNewRegex(e.target.value)}
+                      className="h-8 text-xs font-mono"
+                    />
+                  </div>
+                  <div className="w-32 space-y-1.5">
+                    <label htmlFor="custom-action-select" className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Action
+                    </label>
+                    <Select value={newAction} onValueChange={(v: any) => setNewAction(v)}>
+                      <SelectTrigger id="custom-action-select" className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="masked" className="text-xs">Masked</SelectItem>
+                        <SelectItem value="blocked" className="text-xs">Blocked</SelectItem>
+                        <SelectItem value="logged" className="text-xs">Logged Only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-32 space-y-1.5">
+                    <label htmlFor="custom-severity-select" className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Severity
+                    </label>
+                    <Select value={newSeverity} onValueChange={(v: any) => setNewSeverity(v)}>
+                      <SelectTrigger id="custom-severity-select" className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mask" className="text-xs">Mask</SelectItem>
+                        <SelectItem value="block" className="text-xs">Block</SelectItem>
+                        <SelectItem value="log" className="text-xs">Log</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" size="sm" className="h-8 gap-1.5 text-xs" disabled={updateCustomPatterns.isPending}>
+                    <Plus className="h-3.5 w-3.5" /> Add Pattern
+                  </Button>
+                </form>
+
+                {/* List of patterns */}
+                {customPatternsLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                ) : customPatterns.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-2 py-8 text-muted-foreground border border-dashed rounded-lg">
+                    <ShieldCheck className="h-8 w-8 opacity-20" />
+                    <p className="text-xs font-medium">No custom secret scanning patterns defined yet.</p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border overflow-hidden">
+                    <table className="w-full text-left border-collapse text-xs font-mono">
+                      <thead>
+                        <tr className="border-b bg-muted/20 text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
+                          <th className="px-4 py-2.5">Regex Pattern</th>
+                          <th className="px-4 py-2.5 w-32">Action</th>
+                          <th className="px-4 py-2.5 w-32">Severity</th>
+                          <th className="px-4 py-2.5 w-16 text-center">Delete</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/40">
+                        {customPatterns.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-muted/10 transition-colors">
+                            <td className="px-4 py-2.5 break-all text-rose-300 font-semibold">{item.regex}</td>
+                            <td className="px-4 py-2.5 whitespace-nowrap"><ActionBadge action={item.action} /></td>
+                            <td className="px-4 py-2.5 whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1 rounded bg-muted border px-1.5 py-0.5 text-[10px] uppercase font-medium">
+                                {item.severity}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5 text-center">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                                onClick={() => handleDeletePattern(idx)}
+                                disabled={updateCustomPatterns.isPending}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

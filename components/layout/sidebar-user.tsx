@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useMe } from "@/lib/queries/auth";
 import { useLogout } from "@/lib/queries/auth";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
-import { LogOut, ChevronsUpDown } from "lucide-react";
+import { LogOut, ChevronsUpDown, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SidebarUserProps {
@@ -60,6 +61,23 @@ export function SidebarUser({ collapsed }: SidebarUserProps) {
       <div className="flex flex-col items-center gap-2 px-0 pb-2">
         <Separator className="mb-1" />
         <ThemeToggle collapsed />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              id="user-billing-collapsed"
+              href="/dashboard/billing"
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-md",
+                "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
+                "transition-colors"
+              )}
+              aria-label="Billing"
+            >
+              <CreditCard className="h-4 w-4" />
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="right">Billing</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -128,9 +146,20 @@ export function SidebarUser({ collapsed }: SidebarUserProps) {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
+              id="user-billing-button"
+              asChild
+              className="gap-2 cursor-pointer"
+            >
+              <Link href="/dashboard/billing">
+                <CreditCard className="h-4 w-4" />
+                Billing & Subscriptions
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
               id="logout-button"
               onSelect={handleLogout}
-              className="gap-2 text-destructive focus:text-destructive"
+              className="gap-2 text-destructive focus:text-destructive cursor-pointer"
             >
               <LogOut className="h-4 w-4" />
               Sign out

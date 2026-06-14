@@ -26,7 +26,9 @@ import {
   Clock,
   ArrowRight,
   Check,
+  Lock,
 } from "lucide-react";
+import { useSubscription } from "@/lib/queries/billing";
 import { useSidebarProject } from "@/components/layout/sidebar";
 import {
   useGeoResidencyRules,
@@ -182,6 +184,7 @@ export default function GeoResidencyClient() {
 
   // Queries & Mutations
   const { data: origins } = useOrigins(projectId);
+  const { data: subData, isLoading: subLoading } = useSubscription();
 
   const { data: masks, isLoading: masksLoading } = useDataPrivacyMasks(projectId);
   const createMask = useCreateDataPrivacyMask(projectId);
@@ -323,6 +326,18 @@ export default function GeoResidencyClient() {
 
   const isActive = activeRulesCount > 0 || activeMasksCount > 0;
 
+  const plan = subData?.plan;
+  const aiGeoRoutingEnabled = plan?.aiGeoRoutingEnabled ?? false;
+
+  if (subLoading) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-muted-foreground p-6">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm">Loading compliance settings...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       {/* ── Page Header ─────────────────────────────────── */}
@@ -349,6 +364,23 @@ export default function GeoResidencyClient() {
       </div>
 
       <div className="flex flex-1 flex-col gap-6 p-6">
+        {!aiGeoRoutingEnabled ? (
+          <div className="relative rounded-xl border border-rose-500/20 bg-rose-500/5 p-8 text-center backdrop-blur-sm min-h-[400px] flex flex-col items-center justify-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/10 mb-4">
+              <Lock className="h-6 w-6 text-rose-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-foreground">Premium Compliance Feature</h3>
+            <p className="mt-1 text-xs text-muted-foreground max-w-md mx-auto">
+              Geo-Fenced Data Residency rules and GDPR response data masking are exclusively available on **Pro**, **Team**, and **Enterprise** plans. Upgrade your plan to configure geographic compliance routing.
+            </p>
+            <div className="mt-4">
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => window.location.hash = "#/billing"}>
+                Upgrade Subscription
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* ── 4-Column Stats Grid ─────────────────────────── */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           {/* Active Masks */}
@@ -779,6 +811,8 @@ export default function GeoResidencyClient() {
             )}
           </CardContent>
         </Card>
+          </>
+        )}
       </div>
     </div>
   );

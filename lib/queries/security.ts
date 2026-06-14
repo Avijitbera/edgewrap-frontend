@@ -121,6 +121,9 @@ export function useUpdateDdosConfig(projectId: string | null | undefined) {
       qc.invalidateQueries({ queryKey: ["ddos-stats", projectId] });
       qc.invalidateQueries({ queryKey: ["projects"] });
     },
+    onError: (err: any) => {
+      alert(err.message || "Failed to update DDoS configuration");
+    },
   });
 }
 
@@ -235,5 +238,33 @@ export function useSecretShieldEvents(
     },
     enabled: !!projectId,
     refetchInterval: 30_000,
+  });
+}
+
+export interface CustomSecretPattern {
+  regex: string;
+  action: "masked" | "blocked" | "logged";
+  severity: "block" | "mask" | "log";
+}
+
+export function useCustomSecretPatterns(projectId: string | null | undefined) {
+  return useQuery<CustomSecretPattern[]>({
+    queryKey: ["secret-shield-custom-patterns", projectId],
+    queryFn: () => apiFetch<CustomSecretPattern[]>(`/projects/${projectId}/secret-shield/patterns`),
+    enabled: !!projectId,
+  });
+}
+
+export function useUpdateCustomSecretPatterns(projectId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CustomSecretPattern[]) =>
+      apiFetch<CustomSecretPattern[]>(`/projects/${projectId}/secret-shield/patterns`, {
+        method: "POST",
+        body,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["secret-shield-custom-patterns", projectId] });
+    },
   });
 }

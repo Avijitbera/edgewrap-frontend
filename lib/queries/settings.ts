@@ -23,6 +23,10 @@ export interface ProjectMember {
   invitedBy: string | null;
   acceptedAt: string | null;
   createdAt: string;
+  user?: {
+    name: string | null;
+    email: string;
+  };
 }
 
 export interface ProjectInvitation {
@@ -60,6 +64,8 @@ export interface UpdateProjectBody {
   replayEnabled?: boolean;
   botDetectionEnabled?: boolean;
   aiInsightsEnabled?: boolean;
+  secretShieldEnabled?: boolean;
+  threatFeedsEnabled?: boolean;
 }
 
 // ─── Project Hooks ────────────────────────────────────────────────────────────
@@ -204,6 +210,33 @@ export function useInviteMember(projectId: string | null | undefined) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["members", projectId] });
+      qc.invalidateQueries({ queryKey: ["invitations", projectId] });
+    },
+  });
+}
+
+export function useProjectInvitations(projectId: string | null | undefined) {
+  return useQuery<ProjectInvitation[]>({
+    queryKey: ["invitations", projectId],
+    queryFn: async () => {
+      const res = await apiFetch<ProjectInvitation[] | { data: ProjectInvitation[] }>(
+        `/projects/${projectId}/invitations`
+      );
+      return Array.isArray(res) ? res : (res as { data: ProjectInvitation[] }).data ?? [];
+    },
+    enabled: !!projectId,
+  });
+}
+
+export function useRevokeInvitation(projectId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (invitationId: string) =>
+      apiFetch<{ message: string }>(`/projects/${projectId}/invitations/${invitationId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["invitations", projectId] });
     },
   });
 }

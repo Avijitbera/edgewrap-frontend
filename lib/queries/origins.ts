@@ -54,6 +54,7 @@ export function useOrigins(projectId: string | null | undefined) {
     queryKey: ["origins", projectId],
     queryFn: () => apiFetch(`/projects/${projectId}/origins`),
     enabled: !!projectId,
+    refetchInterval: 10_000,
   });
 }
 

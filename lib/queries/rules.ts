@@ -52,6 +52,9 @@ export function useCreateEdgeRule(projectId: string | null | undefined) {
     mutationFn: (body: EdgeRulePayload) =>
       apiFetch<EdgeRule>(`/projects/${projectId}/rules`, { method: "POST", body }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["edge-rules", projectId] }),
+    onError: (err: any) => {
+      alert(err.message || "Failed to create edge rule");
+    },
   });
 }
 
@@ -61,6 +64,9 @@ export function useUpdateEdgeRule(projectId: string | null | undefined) {
     mutationFn: ({ id, ...body }: Partial<EdgeRulePayload> & { id: string }) =>
       apiFetch<EdgeRule>(`/projects/${projectId}/rules/${id}`, { method: "PATCH", body }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["edge-rules", projectId] }),
+    onError: (err: any) => {
+      alert(err.message || "Failed to update edge rule");
+    },
   });
 }
 
@@ -70,5 +76,8 @@ export function useDeleteEdgeRule(projectId: string | null | undefined) {
     mutationFn: (ruleId: string) =>
       apiFetch(`/projects/${projectId}/rules/${ruleId}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["edge-rules", projectId] }),
+    onError: (err: any) => {
+      alert(err.message || "Failed to delete edge rule");
+    },
   });
 }

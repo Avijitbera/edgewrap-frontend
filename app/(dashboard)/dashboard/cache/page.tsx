@@ -28,6 +28,7 @@ import {
   useResetCacheConfig,
   useCacheRules,
   useCreateCacheRule,
+  useDeleteCacheRule,
   useCacheSandbox,
   useCacheStats,
   type CacheRule,
@@ -100,6 +101,7 @@ function Toggle({
       </div>
       <button
         role="switch"
+        type="button"
         aria-checked={checked}
         disabled={disabled}
         onClick={() => onChange(!checked)}
@@ -227,6 +229,7 @@ function StatCard({
 function CacheRulesSection({ projectId }: { projectId: string }) {
   const { data: rules, isLoading } = useCacheRules(projectId);
   const createRule = useCreateCacheRule(projectId);
+  const deleteRule = useDeleteCacheRule(projectId);
 
   const [form, setForm] = useState({
     pathPattern: "",
@@ -239,9 +242,13 @@ function CacheRulesSection({ projectId }: { projectId: string }) {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createRule.mutateAsync(form);
-    setForm({ pathPattern: "", method: "GET", ttlSec: 300, bypassCache: false, priority: 100 });
-    setShowForm(false);
+    try {
+      await createRule.mutateAsync(form);
+      setForm({ pathPattern: "", method: "GET", ttlSec: 300, bypassCache: false, priority: 100 });
+      setShowForm(false);
+    } catch {
+      // Keep form open to allow viewing the error displayed inline
+    }
   };
 
   return (
@@ -257,7 +264,10 @@ function CacheRulesSection({ projectId }: { projectId: string }) {
             size="sm"
             variant={showForm ? "ghost" : "outline"}
             className="gap-1.5 text-xs"
-            onClick={() => setShowForm((v) => !v)}
+            onClick={() => {
+              createRule.reset();
+              setShowForm((v) => !v);
+            }}
           >
             <Plus className="h-3 w-3" />
             Add Rule
@@ -271,6 +281,12 @@ function CacheRulesSection({ projectId }: { projectId: string }) {
       {showForm && (
         <CardContent className="border-b pb-4">
           <form onSubmit={handleCreate} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {createRule.isError && (
+              <div className="col-span-full rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive flex items-center gap-1.5 animate-in fade-in duration-200">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+                <span>{(createRule.error as Error)?.message ?? "Failed to create cache rule."}</span>
+              </div>
+            )}
             <div>
               <Label className="text-xs text-muted-foreground mb-1 block">Path Pattern</Label>
               <Input
@@ -358,6 +374,7 @@ function CacheRulesSection({ projectId }: { projectId: string }) {
                   <th className="px-4 py-2 text-left font-medium text-muted-foreground">TTL</th>
                   <th className="px-4 py-2 text-left font-medium text-muted-foreground">Bypass</th>
                   <th className="px-4 py-2 text-left font-medium text-muted-foreground">Status</th>
+                  <th className="px-4 py-2 text-right font-medium text-muted-foreground">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -388,6 +405,26 @@ function CacheRulesSection({ projectId }: { projectId: string }) {
                       ) : (
                         <span className="text-muted-foreground text-[10px]">Disabled</span>
                       )}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <Button
+                        id={`delete-cache-rule-${rule.id}`}
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10 hover:text-destructive shrink-0"
+                        onClick={async () => {
+                          if (confirm("Are you sure you want to delete this cache rule?")) {
+                            await deleteRule.mutateAsync(rule.id);
+                          }
+                        }}
+                        disabled={deleteRule.isPending}
+                      >
+                        {deleteRule.isPending ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
                     </td>
                   </tr>
                 ))}

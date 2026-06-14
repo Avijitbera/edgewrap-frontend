@@ -85,10 +85,15 @@ export const NAV_GROUPS = [
     items: [
       { label: "API Keys", href: "/dashboard/api-keys", icon: KeyRound },
       { label: "Members", href: "/dashboard/members", icon: Users },
-      { label: "Billing", href: "/dashboard/billing", icon: CreditCard },
       { label: "Settings", href: "/dashboard/settings", icon: Settings },
     ],
   },
+  // {
+  //   label: "Account",
+  //   items: [
+  //     { label: "Billing", href: "/dashboard/billing", icon: CreditCard },
+  //   ],
+  // },
 ] as const;
 
 // Flat list for collapsed view

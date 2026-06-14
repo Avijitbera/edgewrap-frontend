@@ -143,6 +143,7 @@ export interface AlertDispatch {
   projectId: string;
   policyId: string;
   channelId: string;
+  status?: "success" | "failed";
   dispatchStatus: "success" | "failed";
   errorMessage: string | null;
   payloadSent: string | null;
