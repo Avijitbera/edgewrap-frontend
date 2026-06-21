@@ -31,7 +31,16 @@ export function useEmailConfig(projectId: string | null | undefined) {
 export function useUpdateEmailConfig(projectId: string | null | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { domain: string }) =>
+    mutationFn: (body: {
+      domain?: string;
+      spfVerified?: boolean;
+      dkimVerified?: boolean;
+      dmarcVerified?: boolean;
+      mxVerified?: boolean;
+      bounceRate?: number;
+      complaintRate?: number;
+      deliveryRate?: number;
+    }) =>
       apiFetch<EmailDeliverabilityConfig>(`/projects/${projectId}/email/config`, {
         method: "PATCH",
         body,

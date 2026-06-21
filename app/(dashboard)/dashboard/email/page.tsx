@@ -221,6 +221,50 @@ export default function EmailDeliverabilityPage() {
   const [inputDomain, setInputDomain] = useState("");
   const [logsPage, setLogsPage] = useState(1);
 
+  // Simulation fields state
+  const [simFields, setSimFields] = useState({
+    spfVerified: false,
+    dkimVerified: false,
+    dmarcVerified: false,
+    mxVerified: false,
+    deliveryRate: "98.8",
+    bounceRate: "1.2",
+    complaintRate: "0.01",
+  });
+
+  const [lastConfigId, setLastConfigId] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<any>(null);
+
+  if (config && (config.id !== lastConfigId || config.updatedAt !== lastUpdatedAt)) {
+    setLastConfigId(config.id);
+    setLastUpdatedAt(config.updatedAt);
+    setSimFields({
+      spfVerified: !!config.spfVerified,
+      dkimVerified: !!config.dkimVerified,
+      dmarcVerified: !!config.dmarcVerified,
+      mxVerified: !!config.mxVerified,
+      deliveryRate: ((config.deliveryRate ?? 0.988) * 100).toFixed(1),
+      bounceRate: ((config.bounceRate ?? 0.012) * 100).toFixed(1),
+      complaintRate: ((config.complaintRate ?? 0.0001) * 100).toFixed(2),
+    });
+  }
+
+  const handleSaveSimulation = async () => {
+    try {
+      await updateConfig.mutateAsync({
+        spfVerified: simFields.spfVerified,
+        dkimVerified: simFields.dkimVerified,
+        dmarcVerified: simFields.dmarcVerified,
+        mxVerified: simFields.mxVerified,
+        deliveryRate: parseFloat(simFields.deliveryRate) / 100,
+        bounceRate: parseFloat(simFields.bounceRate) / 100,
+        complaintRate: parseFloat(simFields.complaintRate) / 100,
+      });
+    } catch (err) {
+      console.error("Failed to save simulation settings:", err);
+    }
+  };
+
   // Parse recommendations
   const recommendations = useMemo(() => {
     if (!config?.aiRecommendations) return [
@@ -553,6 +597,118 @@ export default function EmailDeliverabilityPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Simulation Controls Panel */}
+            <Card className="relative overflow-hidden border-indigo-500/20 bg-background/50 backdrop-blur-md">
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent pointer-events-none" />
+              <CardHeader className="border-b pb-3">
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Sparkles className="h-4 w-4 text-indigo-400" /> Simulation &amp; Testing Controls
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Manually adjust DNS record statuses and email delivery rates to test AI reputation scoring and optimization recommendations.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* DNS record switches */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">DNS Verification Toggles</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { key: "spfVerified", label: "SPF Record" },
+                        { key: "dkimVerified", label: "DKIM Record" },
+                        { key: "dmarcVerified", label: "DMARC Record" },
+                        { key: "mxVerified", label: "MX Record" }
+                      ].map((item) => (
+                        <label
+                          key={item.key}
+                          className={cn(
+                            "flex items-center justify-between p-3 rounded-lg border text-xs cursor-pointer transition-all duration-200 hover:bg-muted/10",
+                            simFields[item.key as keyof typeof simFields]
+                              ? "border-green-500/30 bg-green-500/5 text-green-400 font-medium"
+                              : "border-border/60 bg-muted/5 text-muted-foreground"
+                          )}
+                        >
+                          <span>{item.label}</span>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-border bg-background text-indigo-600 focus:ring-indigo-500 transition-all duration-200"
+                            checked={!!simFields[item.key as keyof typeof simFields]}
+                            onChange={(e) => setSimFields((prev) => ({ ...prev, [item.key]: e.target.checked }))}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Sending stats inputs */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Simulated Traffic Statistics</Label>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="delivery-rate-input" className="text-[11px] text-muted-foreground">Delivery Rate (%)</Label>
+                        <Input
+                          id="delivery-rate-input"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          className="h-9 text-xs transition-all duration-200 focus:border-indigo-500 focus:ring-indigo-500"
+                          value={simFields.deliveryRate}
+                          onChange={(e) => setSimFields((prev) => ({ ...prev, deliveryRate: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="bounce-rate-input" className="text-[11px] text-muted-foreground">Bounce Rate (%)</Label>
+                        <Input
+                          id="bounce-rate-input"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          className="h-9 text-xs transition-all duration-200 focus:border-indigo-500 focus:ring-indigo-500"
+                          value={simFields.bounceRate}
+                          onChange={(e) => setSimFields((prev) => ({ ...prev, bounceRate: e.target.value }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="complaint-rate-input" className="text-[11px] text-muted-foreground">Complaint Rate (%)</Label>
+                        <Input
+                          id="complaint-rate-input"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          className="h-9 text-xs transition-all duration-200 focus:border-indigo-500 focus:ring-indigo-500"
+                          value={simFields.complaintRate}
+                          onChange={(e) => setSimFields((prev) => ({ ...prev, complaintRate: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <Button
+                    id="save-simulation-settings"
+                    className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.2)] hover:shadow-[0_0_20px_rgba(99,102,241,0.4)] active:scale-98 transition-all duration-300 font-medium h-9 text-xs gap-1.5 px-5 rounded-md"
+                    disabled={updateConfig.isPending || checkDeliverability.isPending}
+                    onClick={handleSaveSimulation}
+                  >
+                    {updateConfig.isPending || checkDeliverability.isPending ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Running AI Check...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5" /> Apply &amp; Analyze Configuration
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Delivery Trend Chart */}
             <Card className="flex flex-col">

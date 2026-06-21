@@ -95,10 +95,12 @@ function UsageBar({
   used,
   limit,
   color = "primary",
+  suffix = "",
 }: {
   used: number;
   limit: number | null;
   color?: string;
+  suffix?: string;
 }) {
   const pct = limit ? Math.min((used / limit) * 100, 100) : 0;
   const danger = pct >= 90;
@@ -107,9 +109,16 @@ function UsageBar({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between text-xs">
-        <span className="font-mono text-foreground">{formatNumber(used)}</span>
+        <span className="font-mono text-foreground">
+          {typeof used === "number" && used % 1 !== 0 ? used.toFixed(2) : formatNumber(used)}
+          {suffix}
+        </span>
         <span className="text-muted-foreground">
-          {limit ? `of ${formatNumber(limit)}` : "Unlimited"}
+          {limit === 0
+            ? "Disabled"
+            : limit !== null && limit !== undefined
+              ? `of ${formatNumber(limit)}${suffix}`
+              : "Unlimited"}
         </span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/50">
@@ -522,21 +531,22 @@ export default function OverviewPage() {
                         <p className="text-xs font-medium text-muted-foreground">Total Requests</p>
                         <UsageBar
                           used={totals?.totalRequests ?? 0}
-                          limit={plan?.requestsPerMonthLimit ?? null}
+                          limit={plan ? plan.requestsPerMonthLimit : freeLimit}
                         />
                       </div>
                       <div className="flex flex-col gap-1">
                         <p className="text-xs font-medium text-muted-foreground">Bandwidth</p>
                         <UsageBar
-                          used={Math.round((totals?.totalBandwidthBytes ?? 0) / (1024 * 1024 * 1024))}
-                          limit={plan?.bandwidthGbLimit ?? null}
+                          used={(totals?.totalBandwidthBytes ?? 0) / (1024 * 1024 * 1024)}
+                          limit={plan ? plan.bandwidthGbLimit : 1}
+                          suffix=" GB"
                         />
                       </div>
                       <div className="flex flex-col gap-1">
                         <p className="text-xs font-medium text-muted-foreground">AI Calls</p>
                         <UsageBar
                           used={totals?.aiTotalCalls ?? 0}
-                          limit={plan?.id === "pro" ? 50000 : plan?.id === "team" ? 250000 : plan?.id === "enterprise" || plan?.id?.startsWith("enterprise_") ? 9999999 : null}
+                          limit={plan ? (plan.id === "pro" ? 50000 : plan.id === "team" ? 250000 : plan.id === "enterprise" || plan.id.startsWith("enterprise_") ? 9999999 : null) : 0}
                         />
                       </div>
                       <div className="flex flex-col gap-1">
@@ -865,7 +875,7 @@ export default function OverviewPage() {
                         <div className="flex flex-col gap-0.5 min-w-0">
                           <p className="text-xs font-medium">{formatDate(inv.createdAt)}</p>
                           <p className="text-xs text-muted-foreground font-mono">
-                            {formatCurrency(inv.amount / 100)}
+                            {formatCurrency(inv.amountDueUsd)}
                           </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">

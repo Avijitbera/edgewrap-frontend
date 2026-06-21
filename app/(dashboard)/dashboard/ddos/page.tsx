@@ -210,8 +210,9 @@ function NumericField({
 }) {
   const [local, setLocal] = useState(String(value));
   const prev = String(value);
-  if (prev !== local && !document.activeElement?.id?.includes(id)) {
-    // sync from server if field is not focused
+  if (prev !== local && !document.activeElement?.id?.includes(id) && !disabled) {
+    // sync from server if field is not focused and not saving
+    setLocal(prev);
   }
   return (
     <div className="py-3">
@@ -232,8 +233,17 @@ function NumericField({
             onChange={(e) => setLocal(e.target.value)}
             onBlur={() => {
               const n = Number(local);
-              if (!isNaN(n) && n >= min) onCommit(n);
-              else setLocal(String(value));
+              if (!isNaN(n) && n >= min) {
+                if (max && n > max) {
+                  alert(`${label} cannot exceed ${max}`);
+                  setLocal(String(value));
+                } else {
+                  onCommit(n);
+                }
+              } else {
+                alert(`${label} must be a number greater than or equal to ${min}`);
+                setLocal(String(value));
+              }
             }}
           />
           {unit && <span className="text-xs text-muted-foreground shrink-0">{unit}</span>}

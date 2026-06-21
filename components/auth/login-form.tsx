@@ -48,8 +48,8 @@ export function LoginForm() {
           queryKey: ["projects"],
           queryFn: async () => {
             const { apiFetch } = await import("@/lib/api");
-            const res = await apiFetch<unknown[]>("/projects");
-            return Array.isArray(res) ? res : [];
+            const res = await apiFetch<any>("/projects");
+            return Array.isArray(res) ? res : res?.data ?? [];
           },
         })
         .catch(() => []);

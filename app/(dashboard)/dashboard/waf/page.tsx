@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AreaChart as RechartsAreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
 import {
   ChartConfig,
@@ -161,13 +161,13 @@ function ThreatChart({
 
   const chartConfig = {
     threats: {
-      label: "Threats Detected",
-      color: "var(--destructive)",
+      label: "Threats Blocked",
+      color: "hsl(var(--destructive))",
     },
   } satisfies ChartConfig;
 
   return (
-    <div className="h-[320px] w-full mt-2">
+    <div className="h-[300px] w-full mt-2 relative">
       <ChartContainer config={chartConfig} className="h-full w-full aspect-auto">
         <RechartsAreaChart
           data={filledData}
@@ -180,39 +180,49 @@ function ThreatChart({
         >
           <defs>
             <linearGradient id="threatGlow" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--color-threats)" stopOpacity={0.3} />
-              <stop offset="95%" stopColor="var(--color-threats)" stopOpacity={0} />
+              <stop offset="5%" stopColor="var(--color-threats)" stopOpacity={0.4} />
+              <stop offset="95%" stopColor="var(--color-threats)" stopOpacity={0.01} />
             </linearGradient>
           </defs>
-          <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted/20" />
+          <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted/10" />
           <XAxis
             dataKey="label"
             tickLine={false}
             axisLine={false}
             tickMargin={12}
-            className="text-[10px] fill-muted-foreground font-medium"
+            className="text-[10px] fill-muted-foreground/80 font-medium"
           />
           <YAxis
             tickLine={false}
             axisLine={false}
             tickMargin={12}
             allowDecimals={false}
-            className="text-[10px] fill-muted-foreground font-mono"
+            className="text-[10px] fill-muted-foreground/80 font-mono"
           />
           <ChartTooltip
-            cursor={{ stroke: "var(--color-threats)", strokeWidth: 1, strokeDasharray: "4 4" }}
-            content={<ChartTooltipContent hideLabel />}
+            cursor={{ stroke: "var(--color-threats)", strokeWidth: 1.5, strokeDasharray: "3 3", opacity: 0.5 }}
+            content={
+              <ChartTooltipContent 
+                hideLabel 
+                className="backdrop-blur-md bg-background/80 border-destructive/20 shadow-lg"
+              />
+            }
           />
           <Area
             type="monotone"
             dataKey="threats"
             stroke="var(--color-threats)"
-            strokeWidth={2}
+            strokeWidth={2.5}
             fillOpacity={1}
             fill="url(#threatGlow)"
             activeDot={{
-              r: 5,
-              style: { fill: "var(--color-threats)", filter: "drop-shadow(0 0 6px var(--color-threats))" }
+              r: 6,
+              style: { 
+                fill: "var(--color-threats)", 
+                filter: "drop-shadow(0 0 8px var(--color-threats))",
+                stroke: "var(--background)",
+                strokeWidth: 2
+              }
             }}
           />
         </RechartsAreaChart>
@@ -418,74 +428,70 @@ function WafSandbox({
   }, [result, body]);
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <div>
-        <Label htmlFor="sandbox-preset" className="text-xs text-muted-foreground mb-1 block">Load Preset Template</Label>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {/* Preset Selector */}
+      <div className="bg-muted/30 p-3 rounded-lg border border-border/50">
+        <Label htmlFor="sandbox-preset" className="text-xs font-semibold text-muted-foreground mb-1.5 block">
+          Load Attack or Request Preset
+        </Label>
         <Select onValueChange={handleLoadPreset}>
-          <SelectTrigger id="sandbox-preset" className="h-8 text-xs bg-muted/40 border-muted">
+          <SelectTrigger id="sandbox-preset" className="h-8 text-xs bg-background border-muted/80 focus:ring-1 focus:ring-primary">
             <SelectValue placeholder="Choose an attack or request template..." />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="bg-background/95 backdrop-blur-md">
             {ATTACK_PRESETS.map((p, idx) => (
-              <SelectItem key={idx} value={String(idx)} className="text-xs">{p.name}</SelectItem>
+              <SelectItem key={idx} value={String(idx)} className="text-xs cursor-pointer hover:bg-muted">
+                {p.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <Label htmlFor="sandbox-method" className="text-xs text-muted-foreground mb-1 block">Method</Label>
+      {/* Grid: Method + Path */}
+      <div className="grid grid-cols-4 gap-2">
+        <div className="col-span-1">
+          <Label htmlFor="sandbox-method" className="text-[11px] font-medium text-muted-foreground mb-1 block">Method</Label>
           <Select value={method} onValueChange={setMethod}>
-            <SelectTrigger id="sandbox-method" className="h-8 text-xs">
+            <SelectTrigger id="sandbox-method" className="h-8 text-xs bg-muted/20 font-bold border-muted">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-background/95 backdrop-blur-md">
               {["GET","POST","PUT","PATCH","DELETE","OPTIONS"].map((m) => (
-                <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
+                <SelectItem key={m} value={m} className="text-xs font-semibold">{m}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label htmlFor="sandbox-country" className="text-xs text-muted-foreground mb-1 block">Country</Label>
+        <div className="col-span-3">
+          <Label htmlFor="sandbox-path" className="text-[11px] font-medium text-muted-foreground mb-1 block">Path</Label>
           <Input
-            id="sandbox-country"
+            id="sandbox-path"
             className={cn(
-              "h-8 text-xs transition-all duration-300",
-              highlightedFields.has("country") && "border-red-500 ring-2 ring-red-500/20 bg-red-500/10 text-red-400 font-bold"
+              "h-8 text-xs font-mono transition-all duration-300 bg-muted/10",
+              highlightedFields.has("path") 
+                ? "border-red-500 ring-2 ring-red-500/20 bg-red-500/5 text-red-400 font-bold animate-pulse" 
+                : "border-muted focus-visible:ring-1 focus-visible:ring-primary"
             )}
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            maxLength={2}
-            placeholder="US"
+            value={path}
+            onChange={(e) => setPath(e.target.value)}
+            placeholder="/api/endpoint"
+            required
           />
         </div>
       </div>
 
-      <div>
-        <Label htmlFor="sandbox-path" className="text-xs text-muted-foreground mb-1 block">Path</Label>
-        <Input
-          id="sandbox-path"
-          className={cn(
-            "h-8 text-xs font-mono transition-all duration-300",
-            highlightedFields.has("path") && "border-red-500 ring-2 ring-red-500/20 bg-red-500/10 text-red-400 font-bold"
-          )}
-          value={path}
-          onChange={(e) => setPath(e.target.value)}
-          placeholder="/api/endpoint"
-          required
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
+      {/* Grid: IP, Country, User Agent */}
+      <div className="grid grid-cols-3 gap-2">
         <div>
-          <Label htmlFor="sandbox-ip" className="text-xs text-muted-foreground mb-1 block">Client IP</Label>
+          <Label htmlFor="sandbox-ip" className="text-[11px] font-medium text-muted-foreground mb-1 block">Client IP</Label>
           <Input
             id="sandbox-ip"
             className={cn(
-              "h-8 text-xs font-mono transition-all duration-300",
-              highlightedFields.has("ip") && "border-red-500 ring-2 ring-red-500/20 bg-red-500/10 text-red-400 font-bold"
+              "h-8 text-xs font-mono transition-all duration-300 bg-muted/10",
+              highlightedFields.has("ip") 
+                ? "border-red-500 ring-2 ring-red-500/20 bg-red-500/5 text-red-400 font-bold animate-pulse" 
+                : "border-muted"
             )}
             value={ip}
             onChange={(e) => setIp(e.target.value)}
@@ -493,12 +499,30 @@ function WafSandbox({
           />
         </div>
         <div>
-          <Label htmlFor="sandbox-ua" className="text-xs text-muted-foreground mb-1 block">User Agent</Label>
+          <Label htmlFor="sandbox-country" className="text-[11px] font-medium text-muted-foreground mb-1 block">Country</Label>
+          <Input
+            id="sandbox-country"
+            className={cn(
+              "h-8 text-xs transition-all duration-300 bg-muted/10 font-semibold text-center uppercase",
+              highlightedFields.has("country") 
+                ? "border-red-500 ring-2 ring-red-500/20 bg-red-500/5 text-red-400 font-bold animate-pulse" 
+                : "border-muted"
+            )}
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            maxLength={2}
+            placeholder="US"
+          />
+        </div>
+        <div>
+          <Label htmlFor="sandbox-ua" className="text-[11px] font-medium text-muted-foreground mb-1 block">User Agent</Label>
           <Input
             id="sandbox-ua"
             className={cn(
-              "h-8 text-xs transition-all duration-300",
-              highlightedFields.has("userAgent") && "border-red-500 ring-2 ring-red-500/20 bg-red-500/10 text-red-400 font-bold"
+              "h-8 text-xs transition-all duration-300 bg-muted/10",
+              highlightedFields.has("userAgent") 
+                ? "border-red-500 ring-2 ring-red-500/20 bg-red-500/5 text-red-400 font-bold animate-pulse" 
+                : "border-muted"
             )}
             value={userAgent}
             onChange={(e) => setUserAgent(e.target.value)}
@@ -507,24 +531,31 @@ function WafSandbox({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      {/* Side-by-side: Headers + Body */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <Label htmlFor="sandbox-headers" className="text-xs text-muted-foreground mb-1 block">Headers <span className="text-muted-foreground/60">(JSON)</span></Label>
+          <Label htmlFor="sandbox-headers" className="text-[11px] font-medium text-muted-foreground mb-1 block">
+            Headers <span className="text-[10px] text-muted-foreground/60 font-mono">(JSON)</span>
+          </Label>
           <textarea
             id="sandbox-headers"
-            className="w-full rounded-md border bg-transparent px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-2 focus:ring-ring h-20 text-foreground placeholder:text-muted-foreground"
+            className="w-full rounded-md border border-muted bg-muted/10 px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-1 focus:ring-primary h-20 text-foreground placeholder:text-muted-foreground/40"
             value={headers}
             onChange={(e) => setHeaders(e.target.value)}
             placeholder='{"X-Custom-Header": "value"}'
           />
         </div>
         <div>
-          <Label htmlFor="sandbox-body" className="text-xs text-muted-foreground mb-1 block">Body <span className="text-muted-foreground/60">(optional)</span></Label>
+          <Label htmlFor="sandbox-body" className="text-[11px] font-medium text-muted-foreground mb-1 block">
+            Body <span className="text-[10px] text-muted-foreground/60 font-mono">(Payload)</span>
+          </Label>
           <textarea
             id="sandbox-body"
             className={cn(
-              "w-full rounded-md border bg-transparent px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-2 focus:ring-ring h-20 text-foreground placeholder:text-muted-foreground transition-all duration-300",
-              highlightedFields.has("body") && "border-red-500 ring-2 ring-red-500/20 bg-red-500/10 text-red-400 font-bold"
+              "w-full rounded-md border bg-muted/10 px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-1 focus:ring-primary h-20 text-foreground placeholder:text-muted-foreground/40 transition-all duration-300",
+              highlightedFields.has("body") 
+                ? "border-red-500 ring-2 ring-red-500/20 bg-red-500/5 text-red-400 font-bold animate-pulse" 
+                : "border-muted"
             )}
             value={body}
             onChange={(e) => setBody(e.target.value)}
@@ -533,67 +564,119 @@ function WafSandbox({
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Button id="sandbox-run" type="submit" size="sm" className="gap-1.5 text-xs" disabled={sandbox.isPending}>
-          {sandbox.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
-          {sandbox.isPending ? "Evaluating…" : "Run Evaluation"}
-        </Button>
-        {result && (
-          <Button id="sandbox-reset" type="button" variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={handleReset}>
-            <RotateCcw className="h-3 w-3" /> Reset
+      {/* Buttons */}
+      <div className="flex items-center justify-between border-t pt-3 mt-1">
+        <div className="flex items-center gap-2">
+          <Button id="sandbox-run" type="submit" size="sm" className="gap-1.5 text-xs shadow-sm bg-primary hover:bg-primary/95 text-primary-foreground font-semibold px-4" disabled={sandbox.isPending}>
+            {sandbox.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3 fill-current" />}
+            {sandbox.isPending ? "Evaluating Request…" : "Run Sandbox Test"}
           </Button>
-        )}
+          {result && (
+            <Button id="sandbox-reset" type="button" variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground hover:text-foreground" onClick={handleReset}>
+              <RotateCcw className="h-3 w-3" /> Reset Form
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Result */}
+      {/* Error alert */}
       {sandbox.isError && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          Evaluation failed — check your project has WAF enabled.
+        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5 text-xs text-destructive flex items-center gap-2">
+          <XCircle className="h-4 w-4 shrink-0" />
+          <span>Evaluation failed — ensure WAF is active in your project settings.</span>
         </div>
       )}
 
+      {/* Result Display with Premium Aesthetics */}
       {result && decision && (
         <div
           className={cn(
-            "rounded-lg border p-3 space-y-2 transition-all duration-300",
-            isBlocked && "border-red-500/40 bg-red-500/10",
-            isChallenged && "border-yellow-500/40 bg-yellow-500/10",
-            isAllowed && "border-green-500/40 bg-green-500/10"
+            "rounded-xl border p-4 space-y-3.5 transition-all duration-500 relative overflow-hidden backdrop-blur-md bg-background/50 shadow-md",
+            isBlocked && "border-red-500/30 bg-gradient-to-b from-red-500/[0.04] to-red-500/[0.01] shadow-[0_0_20px_rgba(239,68,68,0.06)]",
+            isChallenged && "border-yellow-500/30 bg-gradient-to-b from-yellow-500/[0.04] to-yellow-500/[0.01] shadow-[0_0_20px_rgba(234,179,8,0.06)]",
+            isAllowed && "border-green-500/30 bg-gradient-to-b from-green-500/[0.04] to-green-500/[0.01] shadow-[0_0_20px_rgba(34,197,94,0.06)]"
           )}
         >
-          <div className="flex items-center gap-2">
-            {isBlocked && <XCircle className="h-4 w-4 text-red-400 shrink-0" />}
-            {isChallenged && <AlertTriangle className="h-4 w-4 text-yellow-400 shrink-0" />}
-            {isAllowed && <CheckCircle2 className="h-4 w-4 text-green-400 shrink-0" />}
-            <span className={cn("text-sm font-semibold", isBlocked && "text-red-400", isChallenged && "text-yellow-400", isAllowed && "text-green-400")}>
-              {isBlocked ? "Request Blocked" : isChallenged ? "Challenge Issued" : "Request Allowed"}
-            </span>
+          {/* Glowing gradient backdrops */}
+          <div className={cn(
+            "absolute -right-8 -top-8 h-20 w-20 rounded-full blur-2xl opacity-20 pointer-events-none transition-all duration-300",
+            isBlocked && "bg-red-500",
+            isChallenged && "bg-yellow-500",
+            isAllowed && "bg-green-500"
+          )} />
+
+          {/* Main header block */}
+          <div className="flex items-center justify-between border-b pb-2.5 border-border/40">
+            <div className="flex items-center gap-2">
+              {isBlocked && (
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
+                  <XCircle className="h-4 w-4 shrink-0" />
+                </div>
+              )}
+              {isChallenged && (
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-400">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                </div>
+              )}
+              {isAllowed && (
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-green-500/10 border border-green-500/20 text-green-400">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                </div>
+              )}
+              <div>
+                <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground/60 leading-none">sandbox decision</p>
+                <span className={cn("text-sm font-bold", isBlocked && "text-red-400", isChallenged && "text-yellow-400", isAllowed && "text-green-400")}>
+                  {isBlocked ? "Blocked (403 Forbidden)" : isChallenged ? "JS Challenge Issued" : "Allowed to Origin"}
+                </span>
+              </div>
+            </div>
+
+            {decision.aiConfidence != null && (
+              <div className="text-right">
+                <p className="text-[9px] uppercase font-bold tracking-wider text-muted-foreground/50 leading-none">AI Confidence</p>
+                <span className="font-mono text-xs font-semibold text-blue-400">
+                  {(decision.aiConfidence * 100).toFixed(1)}%
+                </span>
+              </div>
+            )}
           </div>
-          <div className="space-y-1 text-xs text-muted-foreground">
+
+          {/* Metadata Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-xs">
             {decision.threatType && (
-              <div className="flex items-center gap-2">
-                <span className="w-20 shrink-0">Threat:</span>
+              <div className="flex items-center justify-between py-1 border-b border-border/20">
+                <span className="text-muted-foreground font-medium">Threat Category</span>
                 <ThreatBadge type={decision.threatType} />
               </div>
             )}
-            {decision.reason && (
-              <div className="flex items-start gap-2">
-                <span className="w-20 shrink-0">Reason:</span>
-                <span className="text-foreground/70">{decision.reason}</span>
-              </div>
-            )}
-            {decision.aiConfidence != null && (
-              <div className="flex items-center gap-2">
-                <span className="w-20 shrink-0">AI Score:</span>
-                <span className="font-mono text-blue-400">{(decision.aiConfidence * 100).toFixed(1)}%</span>
-              </div>
-            )}
+
             {decision.ruleId && (
-              <div className="flex items-center gap-2">
-                <span className="w-20 shrink-0">Matched Rule:</span>
-                <span className="font-mono text-yellow-400 underline">{decision.ruleId}</span>
+              <div className="flex items-center justify-between py-1 border-b border-border/20">
+                <span className="text-muted-foreground font-medium">Matched Custom Rule</span>
+                <span className="font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded text-[10px]">
+                  {decision.ruleId}
+                </span>
               </div>
             )}
+
+            <div className="flex items-center justify-between py-1 border-b border-border/20 md:col-span-2">
+              <span className="text-muted-foreground font-medium min-w-16">Decision Reason</span>
+              <span className="text-foreground/90 font-medium text-right line-clamp-2 pl-4">
+                {decision.reason}
+              </span>
+            </div>
+          </div>
+
+          {/* Collapsible inspected path view */}
+          <div className="rounded-lg bg-muted/40 p-2.5 border border-border/30 mt-1">
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground font-semibold mb-1 uppercase font-mono">
+              <span>Evaluated Request Payload</span>
+              <span className="text-muted-foreground/60">{method}</span>
+            </div>
+            <div className="font-mono text-[11px] text-muted-foreground/90 break-all bg-background/40 p-2 rounded border border-border/20">
+              <span className="text-primary font-bold">{method}</span>{" "}
+              <span className="text-foreground">{path}</span>
+            </div>
           </div>
         </div>
       )}
@@ -740,9 +823,11 @@ export default function WafPage() {
   const [sensitivityScore, setSensitivityScore] = useState<number>(70);
   // Sync from server whenever config loads / resets
   const prevConfigScore = config?.sensitivityScore;
-  if (prevConfigScore !== undefined && prevConfigScore !== sensitivityScore && !updateConfig.isPending) {
-    setSensitivityScore(prevConfigScore);
-  }
+  useEffect(() => {
+    if (prevConfigScore !== undefined) {
+      setSensitivityScore(prevConfigScore);
+    }
+  }, [prevConfigScore]);
 
   const events = eventsResp?.data ?? [];
   const eventsMeta = eventsResp?.meta;
@@ -948,7 +1033,12 @@ export default function WafPage() {
                         <p className="text-sm font-medium">Sensitivity Score</p>
                         <p className="text-xs text-muted-foreground">Higher = more strict (more false positives possible)</p>
                       </div>
-                      <span className="rounded-md bg-muted px-2 py-0.5 text-sm font-mono font-semibold">{sensitivityScore}</span>
+                      <span className={cn(
+                        "rounded-md bg-muted px-2 py-0.5 text-sm font-mono font-semibold",
+                        !config.aiAnomalyEnabled && "text-muted-foreground/40"
+                      )}>
+                        {sensitivityScore}
+                      </span>
                     </div>
                     <input
                       id="waf-sensitivity-slider"
@@ -957,10 +1047,14 @@ export default function WafPage() {
                       max={100}
                       step={5}
                       value={sensitivityScore}
+                      disabled={!config.aiAnomalyEnabled || updateConfig.isPending}
                       onChange={(e) => setSensitivityScore(Number(e.target.value))}
                       onMouseUp={(e) => handleSensitivityCommit(Number((e.target as HTMLInputElement).value))}
                       onTouchEnd={(e) => handleSensitivityCommit(Number((e.currentTarget as HTMLInputElement).value))}
-                      className="w-full accent-primary cursor-pointer"
+                      className={cn(
+                        "w-full accent-primary transition-all duration-300",
+                        config.aiAnomalyEnabled && !updateConfig.isPending ? "cursor-pointer" : "cursor-not-allowed opacity-40"
+                      )}
                     />
                     <div className="mt-1 flex justify-between text-[10px] text-muted-foreground/60">
                       <span>Permissive</span>

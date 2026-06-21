@@ -93,7 +93,9 @@ export interface Invoice {
   stripeInvoiceId: string | null;
   polarOrderId: string | null;
   billingProvider: "stripe" | "polar";
-  amount: number;
+  amountDueUsd: number;
+  amountPaidUsd: number;
+  amountRemainingUsd: number;
   currency: string;
   status: "draft" | "open" | "paid" | "uncollectible" | "void";
   periodStart: string | null;

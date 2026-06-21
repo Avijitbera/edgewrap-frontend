@@ -70,6 +70,15 @@ function formatCurrency(usd: number): string {
   }).format(usd);
 }
 
+function formatPaygRate(pricePerRequest: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(pricePerRequest * 10000);
+}
+
 function formatDate(str: string | null | undefined): string {
   if (!str) return "—";
   return new Date(str).toLocaleDateString("en-US", {
@@ -83,10 +92,12 @@ function UsageBar({
   used,
   limit,
   color = "primary",
+  suffix = "",
 }: {
   used: number;
   limit: number | null;
   color?: string;
+  suffix?: string;
 }) {
   const pct = limit ? Math.min((used / limit) * 100, 100) : 0;
   const danger = pct >= 90;
@@ -95,12 +106,15 @@ function UsageBar({
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between text-xs">
-        <span className="font-mono text-foreground">{formatNumber(used)}</span>
+        <span className="font-mono text-foreground">
+          {typeof used === "number" && used % 1 !== 0 ? used.toFixed(2) : formatNumber(used)}
+          {suffix}
+        </span>
         <span className="text-muted-foreground font-medium">
           {limit === 0
             ? "Disabled"
             : limit !== null && limit !== undefined
-              ? `of ${formatNumber(limit)}`
+              ? `of ${formatNumber(limit)}${suffix}`
               : "Unlimited"}
         </span>
       </div>
@@ -204,14 +218,19 @@ export default function BillingPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto p-6 space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Billing & Subscriptions</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Manage your subscription tier, billing portal settings, and view API usage metrics.
-          </p>
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      {/* ── Page Header ─────────────────────────────────────── */}
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-background/80 px-6 py-4 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+            <CreditCard className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold leading-tight">Billing & Subscriptions</h1>
+            <p className="text-xs text-muted-foreground">
+              Manage your subscription tier, billing portal settings, and view API usage metrics.
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {periodEnd && (
@@ -235,6 +254,8 @@ export default function BillingPage() {
           </Button>
         </div>
       </div>
+
+      <div className="flex flex-1 flex-col gap-6 p-6">
 
       {/* Usage & Limits Card */}
       <Card className="border-border/60 bg-card/50">
@@ -279,8 +300,9 @@ export default function BillingPage() {
                     </p>
                   </div>
                   <UsageBar
-                    used={Math.round((totals?.totalBandwidthBytes ?? 0) / (1024 * 1024 * 1024))}
+                    used={(totals?.totalBandwidthBytes ?? 0) / (1024 * 1024 * 1024)}
                     limit={currentPlan?.bandwidthGbLimit ?? 1}
+                    suffix=" GB"
                   />
                 </div>
 
@@ -556,7 +578,7 @@ export default function BillingPage() {
                     <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 text-[11px] text-emerald-400 flex items-start gap-1.5 leading-relaxed">
                       <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
                       <span>
-                        PAYG active. Extra requests charged at {formatCurrency(currentPlan.paygPricePerRequest ?? 0)} / 10K.
+                        PAYG active. Extra requests charged at {formatPaygRate(currentPlan.paygPricePerRequest ?? 0)} / 10K.
                       </span>
                     </div>
                   ) : (
@@ -799,7 +821,7 @@ export default function BillingPage() {
                       <tr key={inv.id} className="hover:bg-muted/10">
                         <td className="py-3 font-medium text-foreground">{formatDate(inv.createdAt)}</td>
                         <td className="py-3 font-mono">{inv.stripeInvoiceId ?? inv.polarOrderId ?? inv.id.slice(0, 12)}</td>
-                        <td className="py-3 font-mono text-foreground">{formatCurrency(inv.amount)}</td>
+                        <td className="py-3 font-mono text-foreground">{formatCurrency(inv.amountDueUsd)}</td>
                         <td className="py-3">
                           <InvoiceStatusBadge status={inv.status} />
                         </td>
@@ -809,10 +831,22 @@ export default function BillingPage() {
                               href={inv.invoiceUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-primary hover:underline"
+                              className={cn(
+                                "inline-flex items-center gap-1 hover:underline font-semibold",
+                                inv.status === "open" ? "text-amber-400 hover:text-amber-300" : "text-primary"
+                              )}
                             >
-                              <FileText className="h-3.5 w-3.5" />
-                              PDF <ExternalLink className="h-3 w-3" />
+                              {inv.status === "open" ? (
+                                <>
+                                  <CreditCard className="h-3.5 w-3.5" />
+                                  Pay <ExternalLink className="h-3 w-3" />
+                                </>
+                              ) : (
+                                <>
+                                  <FileText className="h-3.5 w-3.5" />
+                                  PDF <ExternalLink className="h-3 w-3" />
+                                </>
+                              )}
                             </a>
                           ) : (
                             <span className="text-neutral-600">—</span>
@@ -886,6 +920,7 @@ export default function BillingPage() {
           </div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }

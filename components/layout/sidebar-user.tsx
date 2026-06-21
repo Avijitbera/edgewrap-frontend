@@ -41,7 +41,11 @@ export function SidebarUser({ collapsed }: SidebarUserProps) {
   const logout = useLogout();
 
   async function handleLogout() {
-    await logout.mutateAsync();
+    try {
+      await logout.mutateAsync();
+    } catch {
+      // Ignore API request failures during logout
+    }
     router.push("/login");
   }
 

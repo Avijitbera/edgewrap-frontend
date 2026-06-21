@@ -19,6 +19,7 @@ import {
   Activity,
   Award,
   Lock,
+  Pencil,
 } from "lucide-react";
 import { useSidebarProject } from "@/components/layout/sidebar";
 import {
@@ -79,14 +80,34 @@ function FormatDate({ dateStr }: { dateStr: string | number | null }) {
   }
 }
 
+function formatTtlFriendly(secondsStr: string): string {
+  const seconds = Number(secondsStr);
+  if (isNaN(seconds) || seconds <= 0) return "";
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (seconds < 3600) {
+    return `≈ ${minutes}m` + (remainingSeconds > 0 ? ` ${remainingSeconds}s` : "");
+  }
+  const hours = Math.floor(seconds / 3600);
+  const remainingMinutes = Math.floor((seconds % 3600) / 60);
+  if (seconds < 86400) {
+    return `≈ ${hours}h` + (remainingMinutes > 0 ? ` ${remainingMinutes}m` : "");
+  }
+  const days = Math.floor(seconds / 86400);
+  const remainingHours = Math.floor((seconds % 86400) / 3600);
+  return `≈ ${days}d` + (remainingHours > 0 ? ` ${remainingHours}h` : "");
+}
+
 // ─── Main Client Page ──────────────────────────────────────────────────────────
 
 export default function LoadBalancerClient() {
   const { currentProject } = useSidebarProject();
   const projectId = currentProject?.id ?? null;
 
-  // Add Pool Modal Visibility State
+  // Add/Edit Pool Modal Visibility & Context State
   const [showAddPoolModal, setShowAddPoolModal] = useState(false);
+  const [editingPool, setEditingPool] = useState<LoadBalancerPool | null>(null);
 
   // Form Field State
   const [poolName, setPoolName] = useState("");
@@ -105,8 +126,21 @@ export default function LoadBalancerClient() {
   const { data: origins } = useOrigins(projectId);
   const { data: pools, isLoading: poolsLoading } = useLoadBalancerPools(projectId);
   const createPool = useCreateLoadBalancerPool(projectId);
+  const updatePool = useUpdateLoadBalancerPool(projectId);
   const deletePool = useDeleteLoadBalancerPool(projectId);
   const { data: subData, isLoading: subLoading } = useSubscription();
+
+  const handleCloseModal = () => {
+    setPoolName("");
+    setPoolAlgorithm("round_robin");
+    setSessionAffinity(false);
+    setCookieName("ac_affinity");
+    setCookieTtl("3600");
+    setLocalMappedOrigins([]);
+    setEditingPool(null);
+    setFormError("");
+    setShowAddPoolModal(false);
+  };
 
   if (!projectId) {
     return (
@@ -157,7 +191,7 @@ export default function LoadBalancerClient() {
     setLocalMappedOrigins(prev => prev.filter(x => x.originId !== originId));
   };
 
-  const handleCreatePoolSubmit = async (e: React.FormEvent) => {
+  const handlePoolSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError("");
 
@@ -168,25 +202,43 @@ export default function LoadBalancerClient() {
       return;
     }
 
-    try {
-      await createPool.mutateAsync({
-        name: poolName.trim(),
-        algorithm: poolAlgorithm,
-        sessionAffinityEnabled: sessionAffinity,
-        stickyCookieName: sessionAffinity ? cookieName.trim() : undefined,
-        stickyCookieTtlSec: sessionAffinity ? Number(cookieTtl) : undefined,
-        origins: localMappedOrigins.map(o => ({ originId: o.originId, weight: o.weight })),
-      });
+    if (sessionAffinity) {
+      if (!cookieName.trim() || !/^[a-zA-Z0-9_\-]+$/.test(cookieName)) {
+        setFormError("Cookie name must be alphanumeric and can only contain letters, numbers, hyphens, and underscores.");
+        return;
+      }
+      const ttlVal = Number(cookieTtl);
+      if (isNaN(ttlVal) || ttlVal < 1 || ttlVal > 31536000) {
+        setFormError("Affinity TTL must be a valid positive integer between 1 and 31,536,000 seconds.");
+        return;
+      }
+    }
 
-      setPoolName("");
-      setPoolAlgorithm("round_robin");
-      setSessionAffinity(false);
-      setCookieName("ac_affinity");
-      setCookieTtl("3600");
-      setLocalMappedOrigins([]);
-      setShowAddPoolModal(false);
+    try {
+      if (editingPool) {
+        await updatePool.mutateAsync({
+          id: editingPool.id,
+          name: poolName.trim(),
+          algorithm: poolAlgorithm,
+          sessionAffinityEnabled: sessionAffinity,
+          stickyCookieName: sessionAffinity ? cookieName.trim() : undefined,
+          stickyCookieTtlSec: sessionAffinity ? Number(cookieTtl) : undefined,
+          origins: localMappedOrigins.map(o => ({ originId: o.originId, weight: o.weight })),
+        });
+      } else {
+        await createPool.mutateAsync({
+          name: poolName.trim(),
+          algorithm: poolAlgorithm,
+          sessionAffinityEnabled: sessionAffinity,
+          stickyCookieName: sessionAffinity ? cookieName.trim() : undefined,
+          stickyCookieTtlSec: sessionAffinity ? Number(cookieTtl) : undefined,
+          origins: localMappedOrigins.map(o => ({ originId: o.originId, weight: o.weight })),
+        });
+      }
+
+      handleCloseModal();
     } catch (err: any) {
-      setFormError(err?.message ?? "Failed to create load balancer pool.");
+      setFormError(err?.message ?? `Failed to ${editingPool ? "update" : "create"} load balancer pool.`);
     }
   };
 
@@ -247,7 +299,7 @@ export default function LoadBalancerClient() {
                       size="sm"
                       className="gap-1.5 text-xs"
                       onClick={() => {
-                        setFormError("");
+                        handleCloseModal();
                         setShowAddPoolModal(true);
                       }}
                     >
@@ -272,62 +324,121 @@ export default function LoadBalancerClient() {
                     </div>
                   ) : (
                     <div className="divide-y divide-border">
-                      {pools.map(pool => (
-                        <div key={pool.id} className="p-4 space-y-3 hover:bg-muted/10 transition-colors">
-                          <div className="flex items-start justify-between">
-                            <div className="space-y-1">
-                              <h4 className="text-sm font-semibold text-foreground">{pool.name}</h4>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <AlgorithmBadge algo={pool.algorithm} />
-                                {pool.sessionAffinityEnabled ? (
-                                  <span className="inline-flex items-center rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-[10px] font-semibold text-green-400">
-                                    Sticky Session Active ({pool.stickyCookieName})
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
-                                    Stateless Balancing
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <Button
-                              id={`btn-del-pool-${pool.id}`}
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0 text-destructive hover:bg-destructive-hover"
-                              onClick={() => {
-                                if (confirm("Are you sure you want to delete this load balancer pool?")) {
-                                  deletePool.mutate(pool.id);
-                                }
-                              }}
-                              disabled={deletePool.isPending}
-                            >
-                              {deletePool.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                            </Button>
-                          </div>
-
-                          {/* Origin list in pool */}
-                          <div className="rounded-lg border bg-muted/20 p-2.5 space-y-1">
-                            <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Origins Assigned</span>
-                            <div className="space-y-1.5 pt-1 text-xs">
-                              {pool.origins && pool.origins.length > 0 ? (
-                                pool.origins.map(mapping => {
-                                  const origin = origins?.find(o => o.id === mapping.originId);
-                                  const label = origin ? origin.label || origin.url : mapping.originId;
-                                  return (
-                                    <div key={mapping.originId} className="flex justify-between items-center font-mono">
-                                      <span className="text-foreground/85 truncate max-w-xs">{label}</span>
-                                      <span className="text-primary font-semibold text-[11px]">Weight: {mapping.weight}</span>
+                      {(() => {
+                        const sortedPools = [...pools].sort((a, b) => {
+                          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                          return dateA - dateB;
+                        });
+                        return sortedPools.map((pool, index) => {
+                          const isPrimary = index === 0;
+                          const priorityLabel = isPrimary ? "Priority #1 — Primary" : `Priority #${index + 1} — Failover Target`;
+                          const priorityColor = isPrimary 
+                            ? "bg-amber-500/10 text-amber-400 border-amber-500/20" 
+                            : "bg-teal-500/10 text-teal-400 border-teal-500/20";
+                          return (
+                            <div key={pool.id}>
+                              <div className="p-4 space-y-3 hover:bg-muted/10 transition-colors">
+                                <div className="flex items-start justify-between">
+                                  <div className="space-y-1">
+                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                      <h4 className="text-sm font-semibold text-foreground">{pool.name}</h4>
+                                      <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold", priorityColor)}>
+                                        {priorityLabel}
+                                      </span>
                                     </div>
-                                  );
-                                })
-                              ) : (
-                                <span className="italic opacity-60">No origins configured for this pool</span>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <AlgorithmBadge algo={pool.algorithm} />
+                                      {pool.sessionAffinityEnabled ? (
+                                        <span className="inline-flex items-center rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-[10px] font-semibold text-green-400">
+                                          Sticky Session Active ({pool.stickyCookieName}, {pool.stickyCookieTtlSec}s)
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center rounded-full border border-slate-500/30 bg-slate-500/10 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                                          Stateless Balancing
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      id={`btn-edit-pool-${pool.id}`}
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                      onClick={() => {
+                                        setEditingPool(pool);
+                                        setPoolName(pool.name);
+                                        setPoolAlgorithm(pool.algorithm);
+                                        setSessionAffinity(pool.sessionAffinityEnabled);
+                                        setCookieName(pool.stickyCookieName || "ac_affinity");
+                                        setCookieTtl(pool.stickyCookieTtlSec?.toString() || "3600");
+                                        
+                                        const poolOrigins = pool.origins?.map(o => {
+                                          const matched = origins?.find(x => x.id === o.originId);
+                                          return {
+                                            originId: o.originId,
+                                            label: matched ? (matched.label || matched.url) : o.originId,
+                                            weight: o.weight,
+                                          };
+                                        }) || [];
+                                        setLocalMappedOrigins(poolOrigins);
+                                        setFormError("");
+                                        setShowAddPoolModal(true);
+                                      }}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      id={`btn-del-pool-${pool.id}`}
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 w-7 p-0 text-destructive hover:bg-destructive-hover"
+                                      onClick={() => {
+                                        if (confirm("Are you sure you want to delete this load balancer pool?")) {
+                                          deletePool.mutate(pool.id);
+                                        }
+                                      }}
+                                      disabled={deletePool.isPending}
+                                    >
+                                      {deletePool.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                    </Button>
+                                  </div>
+                                </div>
+
+                                {/* Origin list in pool */}
+                                <div className="rounded-lg border bg-muted/20 p-2.5 space-y-1">
+                                  <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">Origins Assigned</span>
+                                  <div className="space-y-1.5 pt-1 text-xs">
+                                    {pool.origins && pool.origins.length > 0 ? (
+                                      pool.origins.map(mapping => {
+                                        const origin = origins?.find(o => o.id === mapping.originId);
+                                        const label = origin ? origin.label || origin.url : mapping.originId;
+                                        return (
+                                          <div key={mapping.originId} className="flex justify-between items-center font-mono">
+                                            <span className="text-foreground/85 truncate max-w-xs">{label}</span>
+                                            <span className="text-primary font-semibold text-[11px]">Weight: {mapping.weight}</span>
+                                          </div>
+                                        );
+                                      })
+                                    ) : (
+                                      <span className="italic opacity-60">No origins configured for this pool</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              {index < sortedPools.length - 1 && (
+                                <div className="flex items-center justify-center py-2 bg-muted/5 border-y border-dashed border-border">
+                                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-muted-foreground">
+                                    <span>Auto-Failover Cascade Line</span>
+                                    <ChevronRight className="h-3 w-3 rotate-90 text-primary mt-0.5" />
+                                  </div>
+                                </div>
                               )}
                             </div>
-                          </div>
-                        </div>
-                      ))}
+                          );
+                        });
+                      })()}
                     </div>
                   )}
                 </CardContent>
@@ -387,20 +498,20 @@ export default function LoadBalancerClient() {
         )}
       </div>
 
-      {/* ── MODAL: CREATE LOAD BALANCER POOL ────────────────────── */}
+      {/* ── MODAL: CREATE OR EDIT LOAD BALANCER POOL ────────────────────── */}
       {!isFreePlan && showAddPoolModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="w-full max-w-xl rounded-xl border bg-background shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between border-b px-5 py-4 bg-muted/10 shrink-0">
               <div className="flex items-center gap-2">
                 <Network className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold">New Load Balancer Pool</h3>
+                <h3 className="text-sm font-semibold">{editingPool ? "Edit Load Balancer Pool" : "New Load Balancer Pool"}</h3>
               </div>
-              <button onClick={() => setShowAddPoolModal(false)} className="text-muted-foreground hover:text-foreground">
+              <button onClick={handleCloseModal} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <form onSubmit={handleCreatePoolSubmit} className="flex-1 overflow-y-auto">
+            <form onSubmit={handlePoolSubmit} className="flex-1 overflow-y-auto">
               <div className="p-5 space-y-4">
                 {formError && (
                   <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-400 flex items-center gap-2">
@@ -460,21 +571,32 @@ export default function LoadBalancerClient() {
                           value={cookieName}
                           onChange={(e) => setCookieName(e.target.value)}
                           placeholder="ac_affinity"
-                          className="h-8 text-xs font-mono"
+                          className={cn("h-8 text-xs font-mono", !/^[a-zA-Z0-9_\-]+$/.test(cookieName) && "border-red-500 focus-visible:ring-red-500")}
                           required
                         />
+                        {!/^[a-zA-Z0-9_\-]+$/.test(cookieName) && (
+                          <p className="text-[10px] text-red-400 mt-0.5">Alphanumeric, - and _ only</p>
+                        )}
                       </div>
                       <div className="space-y-1">
-                        <Label htmlFor="cookie-ttl-input" className="text-xs text-muted-foreground">Affinity TTL (seconds)</Label>
+                        <div className="flex justify-between items-center">
+                          <Label htmlFor="cookie-ttl-input" className="text-xs text-muted-foreground">Affinity TTL (seconds)</Label>
+                          {Number(cookieTtl) > 0 && (
+                            <span className="text-[10px] text-primary font-medium">{formatTtlFriendly(cookieTtl)}</span>
+                          )}
+                        </div>
                         <Input
                           id="cookie-ttl-input"
                           type="number"
                           value={cookieTtl}
                           onChange={(e) => setCookieTtl(e.target.value)}
                           placeholder="3600"
-                          className="h-8 text-xs font-mono"
+                          className={cn("h-8 text-xs font-mono", (isNaN(Number(cookieTtl)) || Number(cookieTtl) < 1 || Number(cookieTtl) > 31536000) && "border-red-500 focus-visible:ring-red-500")}
                           required
                         />
+                        {(isNaN(Number(cookieTtl)) || Number(cookieTtl) < 1 || Number(cookieTtl) > 31536000) && (
+                          <p className="text-[10px] text-red-400 mt-0.5">TTL must be 1 to 31,536,000s</p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -555,12 +677,18 @@ export default function LoadBalancerClient() {
                 </div>
               </div>
               <div className="border-t px-5 py-3 flex justify-end gap-2 bg-muted/10 shrink-0">
-                <Button type="button" variant="outline" size="sm" className="text-xs h-8" onClick={() => setShowAddPoolModal(false)}>
+                <Button type="button" variant="outline" size="sm" className="text-xs h-8" onClick={handleCloseModal}>
                   Cancel
                 </Button>
-                <Button id="btn-save-pool" type="submit" size="sm" className="text-xs h-8 gap-1.5" disabled={createPool.isPending}>
-                  {createPool.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-                  Create Pool
+                <Button 
+                  id="btn-save-pool" 
+                  type="submit" 
+                  size="sm" 
+                  className="text-xs h-8 gap-1.5" 
+                  disabled={createPool.isPending || updatePool.isPending || !poolName.trim() || localMappedOrigins.length === 0 || (sessionAffinity && (!cookieName.trim() || !/^[a-zA-Z0-9_\-]+$/.test(cookieName) || isNaN(Number(cookieTtl)) || Number(cookieTtl) < 1 || Number(cookieTtl) > 31536000))}
+                >
+                  {(createPool.isPending || updatePool.isPending) && <Loader2 className="h-3 w-3 animate-spin" />}
+                  {editingPool ? "Save Changes" : "Create Pool"}
                 </Button>
               </div>
             </form>

@@ -14,6 +14,7 @@ import {
   Zap,
   Bot,
   Activity,
+  Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,14 +74,19 @@ export default function DashboardContactSalesPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto p-6 space-y-6">
-      {/* Page Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Contact Sales</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Submit an Enterprise inquiry to request custom volumes, support contracts, and SLAs.
-          </p>
+    <div className="flex flex-1 flex-col overflow-y-auto">
+      {/* ── Page Header ─────────────────────────────────────── */}
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-background/80 px-6 py-4 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+            <Mail className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold leading-tight">Contact Sales</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Submit an Enterprise inquiry to request custom volumes, support contracts, and SLAs.
+            </p>
+          </div>
         </div>
         <Link href="/dashboard/billing">
           <Button variant="outline" size="sm" className="h-8 text-xs">
@@ -90,7 +96,8 @@ export default function DashboardContactSalesPage() {
         </Link>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-12 max-w-5xl items-start">
+      <div className="flex flex-1 flex-col gap-6 p-6">
+        <div className="grid gap-6 md:grid-cols-12 max-w-5xl items-start">
         {/* Form Container */}
         <div className="md:col-span-7">
           <Card className="border-border/60 bg-card/50">
@@ -278,5 +285,6 @@ export default function DashboardContactSalesPage() {
         </div>
       </div>
     </div>
+  </div>
   );
 }
