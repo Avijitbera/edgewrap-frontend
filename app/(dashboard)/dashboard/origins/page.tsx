@@ -547,6 +547,16 @@ export default function OriginsPage() {
   const [domainError, setDomainError] = useState("");
   const [originError, setOriginError] = useState("");
 
+  const getBaseDomain = () => {
+    if (typeof window !== "undefined") {
+      const hostname = window.location.hostname;
+      if (hostname.endsWith(".edgewrap.pro") || hostname === "edgewrap.pro") {
+        return "edgewrap.pro";
+      }
+    }
+    return "edgewrap.com";
+  };
+
   // Get edge domain from backend edgeUrl, fallback to generating it using name & ID if missing
   const edgeDomain = currentProject
     ? (currentProject.edgeUrl
@@ -557,7 +567,7 @@ export default function OriginsPage() {
             .replace(/[^a-z0-9]/g, "")
             .slice(0, 30);
           const suffix = currentProject.id.slice(-6).toLowerCase();
-          return `${cleanName}-${suffix}.edgewrap.com`;
+          return `${cleanName}-${suffix}.${getBaseDomain()}`;
         })())
     : "";
 
@@ -824,7 +834,7 @@ export default function OriginsPage() {
               <p className="font-medium text-foreground flex items-center gap-1.5">
                 <ShieldCheck className="h-3.5 w-3.5 text-primary" /> How CNAME verification works
               </p>
-              <p>1. Add a CNAME record pointing your domain → <code className="font-mono text-foreground">{edgeDomain || "your-edge-domain.edgewrap.com"}</code></p>
+              <p>1. Add a CNAME record pointing your domain → <code className="font-mono text-foreground">{edgeDomain || `your-edge-domain.${getBaseDomain()}`}</code></p>
               <p>2. Click <strong className="text-foreground">Verify</strong> — we run a live DNS lookup to confirm the CNAME.</p>
               <p>3. Once verified, traffic to your domain is routed through this project's edge.</p>
             </div>
