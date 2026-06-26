@@ -21,6 +21,11 @@ export interface AnalyticsSummary {
   wafBlocked: number;
   botsDetected: number;
   sandboxCalls: number;
+  monthly: {
+    totalRequests: number;
+    totalBandwidth: number;
+    periodLabel: string;
+  };
   dailyTrend: Array<{
     day: string;
     label: string;

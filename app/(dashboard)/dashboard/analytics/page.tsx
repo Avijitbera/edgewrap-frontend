@@ -315,13 +315,21 @@ export default function AnalyticsPage() {
       ) : (
         <div className="flex flex-col gap-6 p-6">
           {/* ── Top Stat Cards ──────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
             <StatCard
               icon={Activity}
               label="Total Requests"
               value={formatNumber(requests?.total ?? 0)}
               sub={`in selected period`}
               color="blue"
+              isLoading={summaryLoading}
+            />
+            <StatCard
+              icon={ArrowUpRight}
+              label="This Month"
+              value={formatNumber(summary?.monthly?.totalRequests ?? 0)}
+              sub={summary?.monthly?.periodLabel ?? "Current month"}
+              color="green"
               isLoading={summaryLoading}
             />
             <StatCard

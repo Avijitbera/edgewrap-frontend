@@ -19,11 +19,14 @@ import {
   Activity,
   Server,
   ArrowRight,
+  Lock,
+  Trash2,
 } from "lucide-react";
 import { useSidebarProject } from "@/components/layout/sidebar";
 import {
   useRequestLogs,
   useRequestLogDetails,
+  useSoftDeleteLog,
   type RequestLog,
 } from "@/lib/queries/replay";
 import {
@@ -158,6 +161,8 @@ export default function LogsPage() {
   const [methodFilter, setMethodFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [cacheFilter, setCacheFilter] = useState("all");
+  // Date range: "1d" | "7d" | "30d" | "90d"
+  const [dateRange, setDateRange] = useState("7d");
 
   // State for request details viewer modal
   const [viewingLogId, setViewingLogId] = useState<string | null>(null);
@@ -169,15 +174,19 @@ export default function LogsPage() {
   const [selectedOriginId, setSelectedOriginId] = useState<string>("");
 
   // Queries
+  const DATE_RANGE_DAYS: Record<string, number> = { "1d": 1, "7d": 7, "30d": 30, "90d": 90 };
+  const logsFrom = new Date(Date.now() - (DATE_RANGE_DAYS[dateRange] ?? 7) * 24 * 60 * 60 * 1000).toISOString();
   const { data: logsData, isLoading: logsLoading } = useRequestLogs(projectId, {
     page: logsPage,
-    limit: 10,
+    limit: 20,
     method: methodFilter,
     statusCode: statusFilter !== "all" ? Number(statusFilter) : undefined,
     cacheStatus: cacheFilter,
+    from: logsFrom,
   });
 
   const { data: origins } = useOrigins(projectId);
+  const softDelete = useSoftDeleteLog(projectId);
 
   // Auto-select first origin when loaded
   useEffect(() => {
@@ -222,7 +231,7 @@ export default function LogsPage() {
   // Reset pagination when filters change
   useEffect(() => {
     setLogsPage(1);
-  }, [methodFilter, statusFilter, cacheFilter]);
+  }, [methodFilter, statusFilter, cacheFilter, dateRange]);
 
   if (!projectId) {
     return (
@@ -290,6 +299,18 @@ export default function LogsPage() {
 
                   {/* Filter Toolbar */}
                   <div className="flex flex-wrap gap-2 items-center">
+                    <Select value={dateRange} onValueChange={v => { setDateRange(v); setLogsPage(1); }}>
+                      <SelectTrigger className="h-8 text-xs w-24">
+                        <SelectValue placeholder="Range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1d" className="text-xs">Last 24h</SelectItem>
+                        <SelectItem value="7d" className="text-xs">Last 7 days</SelectItem>
+                        <SelectItem value="30d" className="text-xs">Last 30 days</SelectItem>
+                        <SelectItem value="90d" className="text-xs">Last 90 days</SelectItem>
+                      </SelectContent>
+                    </Select>
+
                     <Select value={methodFilter} onValueChange={setMethodFilter}>
                       <SelectTrigger className="h-8 text-xs w-24">
                         <SelectValue placeholder="Method" />
@@ -343,6 +364,16 @@ export default function LogsPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
+                    {/* Retention banner — shown when any row is expired */}
+                    {logsData.data.some(l => l.retentionExpired) && (
+                      <div className="flex items-start gap-3 border-b border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                        <Lock className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="text-xs">
+                          <span className="font-semibold text-amber-400">Some logs are outside your plan's visibility window.</span>
+                          <span className="ml-1 text-muted-foreground">Logs are never deleted — upgrade your plan to unlock full history access.</span>
+                        </div>
+                      </div>
+                    )}
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b bg-muted/30">
@@ -358,7 +389,16 @@ export default function LogsPage() {
                       </thead>
                       <tbody>
                         {logsData.data.map(log => (
-                          <tr key={log.id} className="border-b hover:bg-muted/10 transition-colors cursor-pointer" onClick={() => setViewingLogId(log.id)}>
+                          <tr
+                            key={log.id}
+                            className={cn(
+                              "border-b transition-colors",
+                              log.retentionExpired
+                                ? "opacity-50 bg-muted/5"
+                                : "hover:bg-muted/10 cursor-pointer"
+                            )}
+                            onClick={() => !log.retentionExpired && setViewingLogId(log.id)}
+                          >
                             <td className="px-4 py-3 text-muted-foreground font-mono">
                               <FormatDate dateStr={log.createdAt} />
                             </td>
@@ -396,16 +436,48 @@ export default function LogsPage() {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <Button
-                                id={`view-btn-${log.id}`}
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 text-[10px] font-semibold gap-1 hover:bg-muted"
-                                onClick={() => setViewingLogId(log.id)}
-                              >
-                                <Eye className="h-3 w-3" />
-                                Details
-                              </Button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                {log.retentionExpired ? (
+                                  <>
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-400/70 font-medium">
+                                      <Lock className="h-3 w-3" /> Locked
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-[10px] text-muted-foreground hover:text-red-400 hover:bg-red-500/5"
+                                      title="Dismiss from view (data is retained)"
+                                      disabled={softDelete.isPending}
+                                      onClick={(e) => { e.stopPropagation(); softDelete.mutate(log.id); }}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button
+                                      id={`view-btn-${log.id}`}
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-[10px] font-semibold gap-1 hover:bg-muted"
+                                      onClick={(e) => { e.stopPropagation(); setViewingLogId(log.id); }}
+                                    >
+                                      <Eye className="h-3 w-3" />
+                                      Details
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-[10px] text-muted-foreground hover:text-red-400 hover:bg-red-500/5"
+                                      title="Dismiss from view (data is retained)"
+                                      disabled={softDelete.isPending}
+                                      onClick={(e) => { e.stopPropagation(); softDelete.mutate(log.id); }}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -645,6 +717,25 @@ export default function LogsPage() {
                       {viewingLogError instanceof Error ? viewingLogError.message : String(viewingLogError)}
                     </p>
                   )}
+                </div>
+              ) : viewingLogDetails.retentionExpired ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-500/10 border border-amber-500/30">
+                    <Lock className="h-6 w-6 text-amber-400" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-amber-400">Log outside visibility window</p>
+                    <p className="text-xs text-muted-foreground max-w-sm">
+                      This log exists in our systems but is outside your plan's visibility window.
+                      Upgrade your plan to unlock full history access including request/response bodies.
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border/40 bg-muted/10 p-4 text-xs font-mono text-left space-y-1.5 w-full max-w-sm">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Method:</span><MethodBadge method={viewingLogDetails.method} /></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Path:</span><span className="text-foreground truncate max-w-[200px]">{viewingLogDetails.path}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Status:</span><StatusBadge code={viewingLogDetails.statusCode} /></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Time:</span><FormatDate dateStr={viewingLogDetails.createdAt} /></div>
+                  </div>
                 </div>
               ) : (
                 <>

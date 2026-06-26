@@ -27,6 +27,8 @@ import {
   X,
   FileText,
   HelpCircle,
+  Lock,
+  Trash2,
 } from "lucide-react";
 import { useSidebarProject } from "@/components/layout/sidebar";
 import {
@@ -34,6 +36,7 @@ import {
   useRequestLogDetails,
   useReplayJobs,
   useTriggerReplay,
+  useSoftDeleteLog,
   type RequestLog,
   type ReplayJob,
 } from "@/lib/queries/replay";
@@ -166,6 +169,10 @@ export default function RequestReplayPage() {
   const [methodFilter, setMethodFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [cacheFilter, setCacheFilter] = useState("all");
+  // Date range for log list
+  const [dateRange, setDateRange] = useState("7d");
+  const DATE_RANGE_DAYS: Record<string, number> = { "1d": 1, "7d": 7, "30d": 30, "90d": 90 };
+  const logsFrom = new Date(Date.now() - (DATE_RANGE_DAYS[dateRange] ?? 7) * 24 * 60 * 60 * 1000).toISOString();
 
   // State for replay configuration modal
   const [configuringLogId, setConfiguringLogId] = useState<string | null>(null);
@@ -185,10 +192,11 @@ export default function RequestReplayPage() {
   // Queries
   const { data: logsData, isLoading: logsLoading } = useRequestLogs(projectId, {
     page: logsPage,
-    limit: 10,
+    limit: 20,
     method: methodFilter,
     statusCode: statusFilter !== "all" ? Number(statusFilter) : undefined,
     cacheStatus: cacheFilter,
+    from: logsFrom,
   });
 
   const { data: jobsData, isLoading: jobsLoading } = useReplayJobs(projectId, {
@@ -198,6 +206,7 @@ export default function RequestReplayPage() {
 
   const { data: origins } = useOrigins(projectId);
   const triggerReplay = useTriggerReplay(projectId);
+  const softDelete = useSoftDeleteLog(projectId);
 
   // Log details queries for modals
   const { data: configuringLogDetails, isLoading: configuringLogLoading } = useRequestLogDetails(
@@ -235,7 +244,7 @@ export default function RequestReplayPage() {
   // Reset pagination when filters change
   useEffect(() => {
     setLogsPage(1);
-  }, [methodFilter, statusFilter, cacheFilter]);
+  }, [methodFilter, statusFilter, cacheFilter, dateRange]);
 
   if (!projectId) {
     return (
@@ -428,6 +437,18 @@ export default function RequestReplayPage() {
 
                   {/* Filter Toolbar */}
                   <div className="flex flex-wrap gap-2 items-center">
+                    <Select value={dateRange} onValueChange={v => { setDateRange(v); setLogsPage(1); }}>
+                      <SelectTrigger className="h-8 text-xs w-24">
+                        <SelectValue placeholder="Range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1d" className="text-xs">Last 24h</SelectItem>
+                        <SelectItem value="7d" className="text-xs">Last 7 days</SelectItem>
+                        <SelectItem value="30d" className="text-xs">Last 30 days</SelectItem>
+                        <SelectItem value="90d" className="text-xs">Last 90 days</SelectItem>
+                      </SelectContent>
+                    </Select>
+
                     <Select value={methodFilter} onValueChange={setMethodFilter}>
                       <SelectTrigger className="h-8 text-xs w-24">
                         <SelectValue placeholder="Method" />
@@ -481,6 +502,16 @@ export default function RequestReplayPage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
+                    {/* Retention banner */}
+                    {logsData.data.some(l => l.retentionExpired) && (
+                      <div className="flex items-start gap-3 border-b border-amber-500/20 bg-amber-500/5 px-4 py-3">
+                        <Lock className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                        <div className="text-xs">
+                          <span className="font-semibold text-amber-400">Some logs are outside your plan's visibility window.</span>
+                          <span className="ml-1 text-muted-foreground">Logs are never deleted — upgrade your plan to unlock replay access for older entries.</span>
+                        </div>
+                      </div>
+                    )}
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b bg-muted/30">
@@ -496,7 +527,13 @@ export default function RequestReplayPage() {
                       </thead>
                       <tbody>
                         {logsData.data.map(log => (
-                          <tr key={log.id} className="border-b hover:bg-muted/10 transition-colors">
+                          <tr
+                            key={log.id}
+                            className={cn(
+                              "border-b transition-colors",
+                              log.retentionExpired ? "opacity-50 bg-muted/5" : "hover:bg-muted/10"
+                            )}
+                          >
                             <td className="px-4 py-3 text-muted-foreground font-mono">
                               <FormatDate dateStr={log.createdAt} />
                             </td>
@@ -526,27 +563,57 @@ export default function RequestReplayPage() {
                               )}
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <div className="flex gap-2 justify-end">
-                                <Button
-                                  id={`view-btn-${log.id}`}
-                                  size="sm"
-                                  variant="ghost"
-                                  className="h-7 text-[10px] font-semibold gap-1 hover:bg-muted"
-                                  onClick={() => setViewingLogId(log.id)}
-                                >
-                                  <Eye className="h-3 w-3" />
-                                  Details
-                                </Button>
-                                <Button
-                                  id={`replay-btn-${log.id}`}
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-[10px] font-semibold gap-1"
-                                  onClick={() => setConfiguringLogId(log.id)}
-                                >
-                                  <Play className="h-2.5 w-2.5" />
-                                  Replay
-                                </Button>
+                              <div className="flex gap-1.5 justify-end items-center">
+                                {log.retentionExpired ? (
+                                  <>
+                                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-400/70 font-medium">
+                                      <Lock className="h-3 w-3" /> Locked
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-[10px] text-muted-foreground hover:text-red-400 hover:bg-red-500/5"
+                                      title="Dismiss from view (data is retained)"
+                                      disabled={softDelete.isPending}
+                                      onClick={() => softDelete.mutate(log.id)}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button
+                                      id={`view-btn-${log.id}`}
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-[10px] font-semibold gap-1 hover:bg-muted"
+                                      onClick={() => setViewingLogId(log.id)}
+                                    >
+                                      <Eye className="h-3 w-3" />
+                                      Details
+                                    </Button>
+                                    <Button
+                                      id={`replay-btn-${log.id}`}
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-[10px] font-semibold gap-1"
+                                      onClick={() => setConfiguringLogId(log.id)}
+                                    >
+                                      <Play className="h-2.5 w-2.5" />
+                                      Replay
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 text-[10px] text-muted-foreground hover:text-red-400 hover:bg-red-500/5"
+                                      title="Dismiss from view (data is retained)"
+                                      disabled={softDelete.isPending}
+                                      onClick={() => softDelete.mutate(log.id)}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             </td>
                           </tr>

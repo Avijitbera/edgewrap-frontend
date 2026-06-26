@@ -36,12 +36,19 @@ export interface RequestLog {
   aiHealerAction?: string | null;
   createdAt: string;
 
+  // Soft-delete — set by user via DELETE /logs/:logId
+  deletedAt?: string | null;
+  isDeletedByUser?: boolean;
+
   // Populated for single log details
   clientIp?: string | null;
   requestUrl?: string | null;
   userAgent?: string | null;
   requestBody?: string | null;
   responseBody?: string | null;
+  // True when this log is outside the plan's visibility window.
+  // The row still exists but body content is withheld.
+  retentionExpired?: boolean;
 }
 
 export interface ReplayJob {
@@ -74,7 +81,7 @@ export interface PaginationMeta {
 
 export function useRequestLogs(
   projectId: string | null | undefined,
-  params?: { method?: string; statusCode?: number; cacheStatus?: string; page?: number; limit?: number }
+  params?: { method?: string; statusCode?: number; cacheStatus?: string; page?: number; limit?: number; from?: string; to?: string }
 ) {
   const qs = new URLSearchParams();
   if (params?.method && params.method !== "all") qs.set("method", params.method);
@@ -82,6 +89,8 @@ export function useRequestLogs(
   if (params?.cacheStatus && params.cacheStatus !== "all") qs.set("cacheStatus", params.cacheStatus);
   if (params?.page) qs.set("page", String(params.page));
   if (params?.limit) qs.set("limit", String(params.limit ?? 20));
+  if (params?.from) qs.set("from", params.from);
+  if (params?.to) qs.set("to", params.to);
 
   return useQuery<{ data: RequestLog[]; meta: PaginationMeta }>({
     queryKey: ["request-logs", projectId, params],
@@ -167,6 +176,20 @@ export function useTriggerReplay(projectId: string | null | undefined) {
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["replay-jobs", projectId] });
+      qc.invalidateQueries({ queryKey: ["request-logs", projectId] });
+    },
+  });
+}
+
+export function useSoftDeleteLog(projectId: string | null | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (logId: string) =>
+      apiFetch<{ message: string }>(
+        `/projects/${projectId}/logs/${logId}`,
+        { method: "DELETE" }
+      ),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["request-logs", projectId] });
     },
   });
