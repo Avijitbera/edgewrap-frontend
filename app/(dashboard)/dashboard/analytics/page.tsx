@@ -256,7 +256,7 @@ export default function AnalyticsPage() {
 
   // Chart configs
   const trafficChartConfig = {
-    totalRequests: { label: "Requests", color: "hsl(var(--primary))" },
+    totalRequests: { label: "Requests", color: "var(--color-primary)" },
     hits: { label: "Cache Hits", color: "hsl(142, 76%, 36%)" },
     misses: { label: "Cache Misses", color: "hsl(0, 84%, 60%)" },
   } satisfies ChartConfig;
@@ -424,8 +424,8 @@ export default function AnalyticsPage() {
                       >
                         <defs>
                           <linearGradient id="totalGrad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                            <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
                           </linearGradient>
                           <linearGradient id="hitsGrad" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="hsl(142, 76%, 36%)" stopOpacity={0.25} />
@@ -451,14 +451,14 @@ export default function AnalyticsPage() {
                           className="fill-muted-foreground"
                         />
                         <ChartTooltip
-                          cursor={{ stroke: "hsl(var(--primary))", strokeWidth: 1, strokeDasharray: "4 4" }}
+                          cursor={{ stroke: "var(--color-primary)", strokeWidth: 1, strokeDasharray: "4 4" }}
                           content={<ChartTooltipContent />}
                         />
                         <Area
                           type="monotone"
                           dataKey="totalRequests"
                           name="Requests"
-                          stroke="hsl(var(--primary))"
+                          stroke="var(--color-primary)"
                           strokeWidth={2}
                           fillOpacity={1}
                           fill="url(#totalGrad)"
@@ -517,11 +517,11 @@ export default function AnalyticsPage() {
                           </Pie>
                           <Tooltip
                             contentStyle={{
-                              background: "hsl(var(--popover))",
-                              border: "1px solid hsl(var(--border))",
+                              background: "var(--color-popover)",
+                              border: "1px solid var(--color-border)",
                               borderRadius: "8px",
                               fontSize: "12px",
-                              color: "hsl(var(--foreground))",
+                              color: "var(--color-foreground)",
                             }}
                             formatter={(v) => [typeof v === "number" ? formatNumber(v) : String(v ?? ""), ""]}
                           />
@@ -607,7 +607,7 @@ export default function AnalyticsPage() {
                           tickFormatter={(v) => `${v}ms`}
                         />
                         <ChartTooltip
-                          cursor={{ stroke: "hsl(var(--primary))", strokeWidth: 1, strokeDasharray: "4 4" }}
+                          cursor={{ stroke: "var(--color-primary)", strokeWidth: 1, strokeDasharray: "4 4" }}
                           content={<ChartTooltipContent />}
                         />
                         <Area
@@ -681,11 +681,11 @@ export default function AnalyticsPage() {
                         />
                         <Tooltip
                           contentStyle={{
-                            background: "hsl(var(--popover))",
-                            border: "1px solid hsl(var(--border))",
+                            background: "var(--color-popover)",
+                            border: "1px solid var(--color-border)",
                             borderRadius: "8px",
                             fontSize: "12px",
-                            color: "hsl(var(--foreground))",
+                            color: "var(--color-foreground)",
                           }}
                           formatter={(v) => [typeof v === "number" ? formatNumber(v) : String(v ?? ""), "Requests"]}
                         />
@@ -739,11 +739,11 @@ export default function AnalyticsPage() {
                         />
                         <Tooltip
                           contentStyle={{
-                            background: "hsl(var(--popover))",
-                            border: "1px solid hsl(var(--border))",
+                            background: "var(--color-popover)",
+                            border: "1px solid var(--color-border)",
                             borderRadius: "8px",
                             fontSize: "12px",
-                            color: "hsl(var(--foreground))",
+                            color: "var(--color-foreground)",
                           }}
                         />
                         <Bar dataKey="hits" name="Cache Hits" fill="hsl(142, 76%, 36%)" radius={[2, 2, 0, 0]} />
@@ -751,7 +751,7 @@ export default function AnalyticsPage() {
                         <Bar dataKey="bypasses" name="Bypasses" fill="hsl(43, 96%, 56%)" radius={[2, 2, 0, 0]} />
                         <Legend
                           wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
-                          formatter={(v) => <span style={{ color: "hsl(var(--muted-foreground))" }}>{v}</span>}
+                          formatter={(v) => <span style={{ color: "var(--color-muted-foreground)" }}>{v}</span>}
                         />
                       </BarChart>
                     </ResponsiveContainer>

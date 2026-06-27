@@ -299,11 +299,11 @@ function CacheDonut({ hits, misses }: { hits: number; misses: number }) {
             >
               {total > 0 ? (
                 <>
-                  <Cell fill="hsl(var(--primary))" />
-                  <Cell fill="hsl(var(--muted))" />
+                  <Cell fill="var(--color-primary)" />
+                  <Cell fill="var(--color-muted)" />
                 </>
               ) : (
-                <Cell fill="hsl(var(--muted))" />
+                <Cell fill="var(--color-muted)" />
               )}
             </Pie>
           </PieChart>
@@ -378,7 +378,7 @@ export default function OverviewPage() {
   const activityChartConfig = {
     events: {
       label: "Security Events",
-      color: "hsl(var(--primary))",
+      color: "var(--color-primary)",
     },
   } satisfies ChartConfig;
 
@@ -594,8 +594,8 @@ export default function OverviewPage() {
                         >
                           <defs>
                             <linearGradient id="activityGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
-                              <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                              <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.25} />
+                              <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
                             </linearGradient>
                           </defs>
                           <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-muted/20" />
@@ -617,21 +617,21 @@ export default function OverviewPage() {
                             className="fill-muted-foreground"
                           />
                           <ChartTooltip
-                            cursor={{ stroke: "hsl(var(--primary))", strokeWidth: 1, strokeDasharray: "4 4" }}
+                            cursor={{ stroke: "var(--color-primary)", strokeWidth: 1, strokeDasharray: "4 4" }}
                             content={<ChartTooltipContent hideLabel />}
                           />
                           <Area
                             type="monotone"
                             dataKey="events"
-                            stroke="hsl(var(--primary))"
+                            stroke="var(--color-primary)"
                             strokeWidth={2}
                             fillOpacity={1}
                             fill="url(#activityGradient)"
                             activeDot={{
                               r: 4,
                               style: {
-                                fill: "hsl(var(--primary))",
-                                filter: "drop-shadow(0 0 4px hsl(var(--primary)))",
+                                fill: "var(--color-primary)",
+                                filter: "drop-shadow(0 0 4px var(--color-primary))",
                               },
                             }}
                           />

@@ -162,7 +162,7 @@ function ThreatChart({
   const chartConfig = {
     threats: {
       label: "Threats Blocked",
-      color: "hsl(var(--destructive))",
+      color: "var(--color-destructive)",
     },
   } satisfies ChartConfig;
 
