@@ -1241,12 +1241,15 @@ export default function WafPage() {
                 </div>
                 {stats && (
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    {stats.threatBreakdown.slice(0, 3).map((t) => (
-                      <span key={t.threatType} className="flex items-center gap-1">
-                        <ThreatBadge type={t.threatType} />
-                        <span className="font-mono">{t.total}</span>
-                      </span>
-                    ))}
+                    {[...stats.threatBreakdown]
+                      .sort((a, b) => b.total - a.total)
+                      .slice(0, 3)
+                      .map((t) => (
+                        <span key={t.threatType} className="flex items-center gap-1">
+                          <ThreatBadge type={t.threatType} />
+                          <span className="font-mono">{t.total}</span>
+                        </span>
+                      ))}
                   </div>
                 )}
               </div>
