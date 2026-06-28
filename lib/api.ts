@@ -54,6 +54,13 @@ export async function apiFetch<T>(
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined") {
+      const pathname = window.location.pathname;
+      if (pathname !== "/login" && pathname !== "/signup") {
+        clearToken();
+        window.location.href = "/login";
+      }
+    }
     const message =
       (data as { error?: string }).error ??
       `Request failed with status ${res.status}`;
