@@ -29,7 +29,7 @@ interface ProjectsResponse {
   meta?: { total: number; page: number; limit: number };
 }
 
-export function useProjects() {
+export function useProjects(options?: { enabled?: boolean }) {
   return useQuery<Project[]>({
     queryKey: ["projects"],
     queryFn: async () => {
@@ -37,6 +37,7 @@ export function useProjects() {
       // Handle both array and wrapped { data: [] } shapes
       return Array.isArray(res) ? res : (res as ProjectsResponse).data ?? [];
     },
+    ...options,
   });
 }
 
